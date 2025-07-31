@@ -1,6 +1,8 @@
 /// Main library file for dart_example
 library dart_example;
 
+import 'services/user_service.dart';
+
 export 'models/user.dart';
 export 'services/user_service.dart';
 
@@ -33,10 +35,10 @@ class DartExampleApp {
   Future<void> start() async {
     print('Starting ${AppConstants.appName} v${AppConstants.version}');
     print('Environment: ${environment.name}');
-    
+
     // Initialize services
     await _initializeServices();
-    
+
     print('Application started successfully');
   }
 
