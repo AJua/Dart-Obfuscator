@@ -1,0 +1,12 @@
+name: dart_example
+description: A sample Dart project for testing symbol discovery
+version: 1.0.0
+
+environment:
+  sdk: '>=2.17.0 <4.0.0'
+
+dependencies:
+  meta: ^1.7.0
+
+dev_dependencies:
+  test: ^1.21.0
