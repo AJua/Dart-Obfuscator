@@ -206,6 +206,14 @@ async function refactorSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode
                           skipNames.includes(symbol.name) ||
                           isFlutterFrameworkMethod(symbol);
         
+        // Debug logging for constructors
+        if (symbol.kind === vscode.SymbolKind.Constructor) {
+            outputChannel.appendLine(`  DEBUG: Constructor detected - ${symbol.name}, kind: ${vscode.SymbolKind[symbol.kind]} (${symbol.kind}), shouldSkip: ${shouldSkip}`);
+            outputChannel.appendLine(`    nonRenameableTypes.includes(symbol.kind): ${nonRenameableTypes.includes(symbol.kind)}`);
+            outputChannel.appendLine(`    skipNames.includes(symbol.name): ${skipNames.includes(symbol.name)}`);
+            outputChannel.appendLine(`    isFlutterFrameworkMethod(symbol): ${isFlutterFrameworkMethod(symbol)}`);
+        }
+        
         if (shouldSkip) {
             outputChannel.appendLine(`  Skipping ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} (Flutter framework or built-in method)`);
         } else {
