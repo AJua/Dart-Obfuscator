@@ -1,7 +1,7 @@
 {
   "name": "dart-code-obfuscator",
   "displayName": "Dart Code Obfuscator", 
-  "description": "Prints symbols and obfuscates Dart code by renaming with random names",
+  "description": "Obfuscates Dart code by renaming symbols with random names",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.74.0"
@@ -16,11 +16,7 @@
   "contributes": {
     "commands": [
       {
-        "command": "dart-symbol-printer.printSymbols",
-        "title": "Print Dart Symbols"
-      },
-      {
-        "command": "dart-symbol-printer.refactorSymbols",
+        "command": "dart-code-obfuscator.obfuscateCode",
         "title": "Obfuscate Dart Code (Random Names)"
       }
     ]

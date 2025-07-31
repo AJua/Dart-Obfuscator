@@ -10,47 +10,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
     outputChannel.appendLine('Dart Code Obfuscator extension is now active!');
 
-    let printDisposable = vscode.commands.registerCommand('dart-symbol-printer.printSymbols', async () => {
-        await printAllDartSymbols();
+    let obfuscateDisposable = vscode.commands.registerCommand('dart-code-obfuscator.obfuscateCode', async () => {
+        await obfuscateDartCode();
     });
 
-    let refactorDisposable = vscode.commands.registerCommand('dart-symbol-printer.refactorSymbols', async () => {
-        await refactorAllDartSymbols();
-    });
-
-    context.subscriptions.push(printDisposable);
-    context.subscriptions.push(refactorDisposable);
-
-    // Auto-run when a Dart project is opened
-    if (vscode.workspace.workspaceFolders) {
-        await printAllDartSymbols();
-    }
+    context.subscriptions.push(obfuscateDisposable);
 }
 
-async function printAllDartSymbols() {
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {
-        vscode.window.showErrorMessage('No workspace folder found');
-        return;
-    }
 
-    // Clear previous output and show the output channel
-    outputChannel.clear();
-    outputChannel.show();
-
-    outputChannel.appendLine('=== DART SYMBOL PRINTER ===');
-    outputChannel.appendLine('Starting symbol discovery...');
-
-    for (const folder of workspaceFolders) {
-        outputChannel.appendLine(`\nProcessing workspace: ${folder.name}`);
-        await processWorkspaceFolder(folder, false);
-    }
-
-    outputChannel.appendLine('\n=== SYMBOL DISCOVERY COMPLETE ===');
-    vscode.window.showInformationMessage('Dart symbols printed to Output panel (Dart Code Obfuscator)');
-}
-
-async function refactorAllDartSymbols() {
+async function obfuscateDartCode() {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders) {
         vscode.window.showErrorMessage('No workspace folder found');
@@ -72,7 +40,7 @@ async function refactorAllDartSymbols() {
 
     for (const folder of workspaceFolders) {
         outputChannel.appendLine(`\nProcessing workspace: ${folder.name}`);
-        const renamedCount = await processWorkspaceFolder(folder, true);
+        const renamedCount = await processWorkspaceForObfuscation(folder);
         totalRenamed += renamedCount;
     }
 
@@ -81,7 +49,7 @@ async function refactorAllDartSymbols() {
     vscode.window.showInformationMessage(`Obfuscation complete! Obfuscated ${totalRenamed} symbols. Check Output panel for details.`);
 }
 
-async function processWorkspaceFolder(folder: vscode.WorkspaceFolder, shouldRefactor: boolean): Promise<number> {
+async function processWorkspaceForObfuscation(folder: vscode.WorkspaceFolder): Promise<number> {
     // Only process files in /lib and /test folders to speed up obfuscation
     const libPattern = new vscode.RelativePattern(folder, 'lib/**/*.dart');
     const testPattern = new vscode.RelativePattern(folder, 'test/**/*.dart');
@@ -95,14 +63,14 @@ async function processWorkspaceFolder(folder: vscode.WorkspaceFolder, shouldRefa
     let totalRenamed = 0;
 
     for (const fileUri of dartFiles) {
-        const renamedCount = await processFile(fileUri, shouldRefactor);
+        const renamedCount = await obfuscateFileSymbols(fileUri);
         totalRenamed += renamedCount;
     }
 
     return totalRenamed;
 }
 
-async function processFile(fileUri: vscode.Uri, shouldRefactor: boolean = false): Promise<number> {
+async function obfuscateFileSymbols(fileUri: vscode.Uri): Promise<number> {
     let renamedCount = 0;
     
     try {
@@ -118,11 +86,7 @@ async function processFile(fileUri: vscode.Uri, shouldRefactor: boolean = false)
         );
 
         if (symbols && symbols.length > 0) {
-            if (shouldRefactor) {
-                renamedCount = await refactorSymbols(symbols, fileUri, document);
-            } else {
-                printSymbols(symbols, 0);
-            }
+            renamedCount = await obfuscateSymbols(symbols, fileUri, document);
         } else {
             outputChannel.appendLine('  No symbols found');
         }
@@ -134,7 +98,7 @@ async function processFile(fileUri: vscode.Uri, shouldRefactor: boolean = false)
     return renamedCount;
 }
 
-async function refactorSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode.Uri, document: vscode.TextDocument): Promise<number> {
+async function obfuscateSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode.Uri, document: vscode.TextDocument): Promise<number> {
     let renamedCount = 0;
     
     // Process symbols in reverse order to avoid position shifts
@@ -143,7 +107,7 @@ async function refactorSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode
     for (const symbol of sortedSymbols) {
         // Recursively process child symbols first
         if (symbol.children && symbol.children.length > 0) {
-            renamedCount += await refactorSymbols(symbol.children, fileUri, document);
+            renamedCount += await obfuscateSymbols(symbol.children, fileUri, document);
         }
         
         // Skip symbol types that typically cannot be renamed
@@ -206,13 +170,6 @@ async function refactorSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode
                           skipNames.includes(symbol.name) ||
                           isFlutterFrameworkMethod(symbol);
         
-        // Debug logging for constructors
-        if (symbol.kind === vscode.SymbolKind.Constructor) {
-            outputChannel.appendLine(`  DEBUG: Constructor detected - ${symbol.name}, kind: ${vscode.SymbolKind[symbol.kind]} (${symbol.kind}), shouldSkip: ${shouldSkip}`);
-            outputChannel.appendLine(`    nonRenameableTypes.includes(symbol.kind): ${nonRenameableTypes.includes(symbol.kind)}`);
-            outputChannel.appendLine(`    skipNames.includes(symbol.name): ${skipNames.includes(symbol.name)}`);
-            outputChannel.appendLine(`    isFlutterFrameworkMethod(symbol): ${isFlutterFrameworkMethod(symbol)}`);
-        }
         
         if (shouldSkip) {
             outputChannel.appendLine(`  Skipping ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} (Flutter framework or built-in method)`);
@@ -320,24 +277,5 @@ function generateObfuscatedName(): string {
     return name;
 }
 
-function printSymbols(symbols: vscode.DocumentSymbol[], indent: number) {
-    const indentStr = '  '.repeat(indent);
-    
-    for (const symbol of symbols) {
-        const kindStr = vscode.SymbolKind[symbol.kind];
-        const range = `${symbol.range.start.line + 1}:${symbol.range.start.character + 1}-${symbol.range.end.line + 1}:${symbol.range.end.character + 1}`;
-        
-        outputChannel.appendLine(`${indentStr}${kindStr}: ${symbol.name} (${range})`);
-        
-        if (symbol.detail) {
-            outputChannel.appendLine(`${indentStr}  Detail: ${symbol.detail}`);
-        }
-
-        // Recursively print child symbols
-        if (symbol.children && symbol.children.length > 0) {
-            printSymbols(symbol.children, indent + 1);
-        }
-    }
-}
 
 export function deactivate() {}
