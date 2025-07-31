@@ -3,6 +3,12 @@ node_modules/
 out/
 *.vsix
 
+# Dart
+.dart_tool/
+pubspec.lock
+.packages
+build/
+
 # Logs
 *.log
 
