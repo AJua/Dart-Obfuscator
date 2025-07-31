@@ -1,181 +1,114 @@
-# Dart Code Obfuscator VSCode Extension
+# Dart Code Obfuscator
 
-A VSCode extension that leverages the IDE's API to iterate through and print all symbols in a Dart project, and obfuscate code by renaming symbols with random names.
+A VSCode extension that obfuscates Dart and Flutter code by intelligently renaming symbols with random names while preserving framework functionality.
 
 ## Features
 
-- **Symbol Discovery**: Automatically scans all `.dart` files in the workspace
-- **Symbol Information**: Uses VSCode's built-in symbol provider API for accurate symbol detection
-- **Detailed Output**: Prints symbol information including:
-  - Symbol type (Class, Method, Field, Constructor, etc.)
-  - Symbol name
-  - Location (line and character ranges)
-  - Additional details when available
-- **Hierarchical Support**: Supports nested symbols (methods within classes, etc.)
-- **Auto-activation**: Auto-runs when a Dart project is opened
-- **Manual Commands**: Two commands available via Command Palette
-- **Code Obfuscation**: Applies IDE's rename refactoring to replace symbol names with random alphanumeric names (3-12 characters)
-- **Flutter-Aware**: Automatically detects and preserves Flutter framework methods to maintain app functionality
-
-## Usage
-
-### Automatic Scanning
-The extension automatically activates and scans for symbols when you open a workspace containing Dart files.
-
-### Manual Commands
-Use the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and run:
-
-**Print Symbols:**
-```
-Print Dart Symbols
-```
-
-**Obfuscate Code:**
-```
-Obfuscate Dart Code (Random Names)
-```
-
-This command will:
-- Find all renameable symbols in your Dart project (classes, methods, functions, variables, fields, etc.)
-- Generate random alphanumeric names (3-12 characters, starting with a letter)
-- Use VSCode's rename refactoring to replace original names with random names
-- Update all references throughout the codebase
-- Ensure no duplicate names are generated
-- Skip symbols that cannot be renamed (built-in methods, special symbols)
-- Provide comprehensive obfuscation for code protection
-
-#### Symbol Types Supported
-The extension attempts to rename all symbol types including:
-- **Classes** - User-defined classes and abstract classes
-- **Methods** - Instance and static methods  
-- **Functions** - Top-level and nested functions
-- **Fields/Variables** - Instance fields, static fields, local variables
-- **Properties** - Getters and setters
-- **Constructors** - Named and default constructors
-- **Enums** - Enum types and values
-- **TypeDefs** - Type aliases
-
-#### Symbols Automatically Skipped
-- **Dart Built-ins**: `toString`, `hashCode`, `operator==`, `runtimeType`, `noSuchMethod`, etc.
-- **Entry Points**: `main` function
-- **Flutter Framework Methods**: 
-  - Widget lifecycle: `build`, `initState`, `dispose`, `didChangeDependencies`, `didUpdateWidget`
-  - State management: `setState`, `createState`, `mounted`, `widget`, `context`
-  - Callbacks: `onPressed`, `onTap`, `onChanged`, `validator`, `builder`
-  - Animation: `addListener`, `removeListener`, `forward`, `reverse`, `animateTo`
-  - Navigation: `push`, `pop`, `pushReplacement`, `pushNamed`
-  - Common patterns: `copyWith`, `lerp`, `of`, `maybeOf`
-- **Pattern-based Detection**: Methods starting with `didChange`, `on` (callbacks), ending with `Builder`/`Delegate`/`Handler`
-- **File/Module/Package** symbols and primitive types
-
-### Viewing Output
-Symbol information is displayed in VSCode's Output panel under "Dart Symbol Printer". The extension automatically opens this output channel when scanning symbols.
+- 🔒 **Code Obfuscation**: Replaces symbol names with random alphanumeric names (3-12 characters)
+- 🎯 **Smart Targeting**: Only processes `/lib` and `/test` folders for faster performance
+- 🛡️ **Flutter-Aware**: Automatically preserves Flutter framework methods to maintain app functionality
+- ⚡ **IDE Integration**: Uses VSCode's built-in rename refactoring for safe, reference-aware obfuscation
+- 🎲 **Collision Prevention**: Ensures unique name generation across the entire codebase
 
 ## Installation
 
-1. Compile the extension:
-   ```bash
-   npm install
-   npm run compile
-   ```
+1. Install from the VSCode Marketplace
+2. Or install manually:
+   - Download the `.vsix` file from releases
+   - Open VSCode Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
+   - Run `Extensions: Install from VSIX...`
+   - Select the downloaded file
 
-2. Package the extension (optional):
-   ```bash
-   npx vsce package
-   ```
+## Usage
 
-3. Install in VSCode:
-   - Press `F5` to run in Extension Development Host
-   - Open the `dart_example` folder in the new VSCode window that opens
-   - The extension will automatically run and show output in the "Dart Symbol Printer" output channel
-   - Or manually run "Print Dart Symbols" from the Command Palette
+1. Open a Dart/Flutter project in VSCode
+2. Open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
+3. Run: **"Obfuscate Dart Code (Random Names)"**
+4. View progress in the "Dart Code Obfuscator" output panel
+
+### What Gets Obfuscated
+
+The extension renames all user-defined symbols including:
+- Classes and abstract classes
+- Methods and functions
+- Fields and variables
+- Properties (getters/setters)
+- Named constructors
+- Enums and enum values
+- Type definitions
+
+### What Gets Preserved
+
+Smart detection automatically skips:
+- **Dart Built-ins**: `toString`, `hashCode`, `operator==`, `main`, etc.
+- **Flutter Lifecycle**: `build`, `initState`, `dispose`, `didChangeDependencies`, etc.
+- **Flutter Callbacks**: `onPressed`, `onTap`, `onChanged`, `validator`, etc.
+- **Flutter Patterns**: Methods starting with `didChange`, `on` (callbacks), ending with `Builder`/`Delegate`/`Handler`
+- **Framework Methods**: `setState`, `createState`, `mounted`, `context`, etc.
+- **Animation/Controller**: `addListener`, `forward`, `reverse`, `animateTo`, etc.
+- **Navigation**: `push`, `pop`, `pushReplacement`, `pushNamed`, etc.
+- **Common Patterns**: `copyWith`, `lerp`, `of`, `maybeOf`, etc.
 
 ## Example Output
 
-### Symbol Printing Output
-```
-=== DART SYMBOL PRINTER ===
-Starting symbol discovery...
-
-Processing workspace: dart_example
-
---- File: lib/models/user.dart ---
-Class: User (5:1-81:2)
-  Detail: User
-  Field: id (6:3-6:20)
-  Field: name (9:3-9:23)
-  Constructor: User (21:3-26:5)
-  Method: fromJson (29:3-36:4)
-  Method: toJson (39:3-46:4)
-
-=== SYMBOL DISCOVERY COMPLETE ===
-```
-
-### Obfuscation Output
 ```
 === DART CODE OBFUSCATION ===
-Starting symbol obfuscation...
-Renaming all renameable symbols with random names...
-
-Processing workspace: dart_example
+Processing workspace: my_flutter_app
 
 --- File: lib/models/user.dart ---
   Obfuscating Class: User -> Kx9mPq4
     ✓ Successfully obfuscated to Kx9mPq4
-  Obfuscating Field: id -> aB7N
-    ✓ Successfully obfuscated to aB7N
   Obfuscating Field: name -> ZtR8wX
     ✓ Successfully obfuscated to ZtR8wX
-  Obfuscating Constructor: User -> Kx9mPq4
-    ✓ Successfully obfuscated to Kx9mPq4
-  Obfuscating Method: fromJson -> pL3vK9mN
-    ✓ Successfully obfuscated to pL3vK9mN
-  Skipping Method: toString (Flutter framework or built-in method)
-  Skipping Method: build (Flutter framework or built-in method)
-  Skipping Method: initState (Flutter framework or built-in method)
-  Obfuscating Method: updateActiveStatus -> qR7sT2nM
+  Skipping Method: build (Flutter framework method)
+  Obfuscating Method: updateProfile -> qR7sT2nM
     ✓ Successfully obfuscated to qR7sT2nM
 
---- File: lib/services/user_service.dart ---
-  Obfuscating Class: UserService -> yU5hJ8
-    ✓ Successfully obfuscated to yU5hJ8
-  Obfuscating Method: getAllUsers -> nK6fD9vB
-    ✓ Successfully obfuscated to nK6fD9vB
-  Obfuscating Function: generateUserId -> mH3tL7pQ
-    ✓ Successfully obfuscated to mH3tL7pQ
-
 === OBFUSCATION COMPLETE ===
-Total symbols obfuscated: 12
+Total symbols obfuscated: 47
 ```
 
-## Demo
+## Benefits
 
-The repository includes a `dart_example` folder with sample Dart code demonstrating various symbol types:
+- **Code Protection**: Makes reverse engineering significantly more difficult
+- **Intellectual Property**: Protects proprietary algorithms and business logic
+- **Performance**: Focused scanning of only essential directories
+- **Safety**: Framework-aware obfuscation prevents app breakage
+- **Reliability**: Uses VSCode's proven rename refactoring engine
 
-- **Models**: User class with fields, constructors, and methods
-- **Services**: Abstract and concrete service classes
-- **Tests**: Unit tests with test groups and cases
-- **Enums**: Environment configuration enum
-- **Utilities**: Static utility methods
+## Requirements
 
-Run `node test_symbols.js` to see a simplified version of what the extension detects.
+- VSCode 1.74.0 or higher
+- Dart/Flutter project workspace
 
-## Technical Details
+## Extension Settings
 
-The extension uses VSCode's `vscode.executeDocumentSymbolProvider` command to get symbols for each Dart file, and `vscode.executeDocumentRenameProvider` for safe obfuscation. This leverages the same symbol information and rename functionality that powers VSCode's outline view and refactoring features.
+No configuration required - works out of the box with sensible defaults.
 
-### Obfuscation Algorithm
-- Generates random names with length 3-12 characters
-- Always starts with a letter (a-z, A-Z) for valid identifier compliance
-- Remaining characters can be letters or numbers (a-z, A-Z, 0-9)
-- Maintains a unique names registry to prevent collisions
-- Falls back to timestamp suffix if collision detection fails
+## Known Limitations
 
-### Key Components
+- Only processes files in `/lib` and `/test` directories
+- Cannot obfuscate external package dependencies
+- Some dynamic reflection-based code may require manual exclusion
 
-- **package.json**: Extension manifest with activation events and commands
-- **src/extension.ts**: Main extension logic
-- **tsconfig.json**: TypeScript configuration
-- **dart_example/**: Sample Dart project for testing
+## Contributing
 
-The extension activates on `onLanguage:dart` events and provides a `dart-symbol-printer.printSymbols` command for manual execution.
+Issues and pull requests are welcome! Please visit our [GitHub repository](https://github.com/username/dart-code-obfuscator).
+
+## License
+
+This extension is licensed under the [MIT License](LICENSE).
+
+## Release Notes
+
+### 1.0.0
+
+Initial release with core obfuscation functionality:
+- Smart Flutter framework detection
+- Focused `/lib` and `/test` processing
+- Comprehensive symbol type support
+- Safe rename refactoring integration
+
+---
+
+**Enjoy secure coding!** 🔐

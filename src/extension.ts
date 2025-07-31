@@ -139,6 +139,9 @@ async function obfuscateSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscod
 
             // Flutter CustomPaint overide method
             'paint', 'shouldRepaint',
+
+            // Equatable overide
+            'props',
             
             // Flutter State methods
             'setState', 'mounted', 'widget', 'context',
