@@ -82,10 +82,15 @@ async function refactorAllDartSymbols() {
 }
 
 async function processWorkspaceFolder(folder: vscode.WorkspaceFolder, shouldRefactor: boolean): Promise<number> {
-    const pattern = new vscode.RelativePattern(folder, '**/*.dart');
-    const dartFiles = await vscode.workspace.findFiles(pattern);
+    // Only process files in /lib and /test folders to speed up obfuscation
+    const libPattern = new vscode.RelativePattern(folder, 'lib/**/*.dart');
+    const testPattern = new vscode.RelativePattern(folder, 'test/**/*.dart');
+    
+    const libFiles = await vscode.workspace.findFiles(libPattern);
+    const testFiles = await vscode.workspace.findFiles(testPattern);
+    const dartFiles = [...libFiles, ...testFiles];
 
-    outputChannel.appendLine(`Found ${dartFiles.length} Dart files in ${folder.name}`);
+    outputChannel.appendLine(`Found ${dartFiles.length} Dart files in ${folder.name} (/lib: ${libFiles.length}, /test: ${testFiles.length})`);
 
     let totalRenamed = 0;
 
