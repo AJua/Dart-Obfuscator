@@ -157,10 +157,48 @@ async function refactorSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode
         ];
 
         // Skip built-in or special symbols that shouldn't be renamed
-        const skipNames = ['main', 'toString', 'hashCode', 'operator==', 'runtimeType', 'noSuchMethod'];
+        const skipNames = [
+            // Dart built-ins
+            'main', 'toString', 'hashCode', 'operator==', 'runtimeType', 'noSuchMethod',
+            
+            // Flutter Widget lifecycle methods
+            'build', 'initState', 'dispose', 'didChangeDependencies', 'didUpdateWidget',
+            'deactivate', 'activate', 'didChangeAppLifecycleState', 'didHaveMemoryPressure',
+            'didChangeAccessibilityFeatures', 'didChangeTextScaleFactor', 'didChangeLocales',
+            'didChangePlatformBrightness', 'didChangeMetrics', 'createState',
+            
+            // Flutter State methods
+            'setState', 'mounted', 'widget', 'context',
+            
+            // Flutter framework callbacks
+            'onPressed', 'onTap', 'onChanged', 'onSubmitted', 'onEditingComplete',
+            'onFieldSubmitted', 'onSaved', 'validator', 'builder',
+            
+            // Flutter animation methods
+            'addListener', 'removeListener', 'addStatusListener', 'removeStatusListener',
+            'forward', 'reverse', 'reset', 'stop', 'animateTo', 'animateWith',
+            
+            // Flutter controller methods
+            'addListener', 'removeListener', 'notifyListeners', 'hasListeners',
+            'clear', 'text', 'selection', 'value',
+            
+            // Flutter navigation methods
+            'push', 'pop', 'pushReplacement', 'pushNamed', 'popUntil', 'canPop',
+            
+            // Flutter theme and localization
+            'of', 'maybeOf', 'localizationsDelegates', 'supportedLocales',
+            
+            // Common Flutter patterns
+            'copyWith', 'lerp', 'resolve', 'createTween', 'transform'
+        ];
         
-        if (nonRenameableTypes.includes(symbol.kind) || skipNames.includes(symbol.name)) {
-            outputChannel.appendLine(`  Skipping ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} (non-renameable type or special symbol)`);
+        // Check for Flutter framework methods and patterns
+        const shouldSkip = nonRenameableTypes.includes(symbol.kind) || 
+                          skipNames.includes(symbol.name) ||
+                          isFlutterFrameworkMethod(symbol);
+        
+        if (shouldSkip) {
+            outputChannel.appendLine(`  Skipping ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} (Flutter framework or built-in method)`);
         } else {
             // Generate random obfuscated name
             const newName = generateObfuscatedName();
@@ -202,6 +240,35 @@ async function refactorSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode
     }
     
     return renamedCount;
+}
+
+function isFlutterFrameworkMethod(symbol: vscode.DocumentSymbol): boolean {
+    // Check for common Flutter method patterns that shouldn't be renamed
+    const name = symbol.name;
+    
+    // Override methods (typically start with specific patterns)
+    if (name.startsWith('didChange') || name.startsWith('willChange') || 
+        name.startsWith('on') && name.length > 2 && name[2] === name[2].toUpperCase()) {
+        return true;
+    }
+    
+    // Methods that commonly return Widget types (check if detail contains Widget)
+    if (symbol.detail && (symbol.detail.includes('Widget') || symbol.detail.includes('State<'))) {
+        return true;
+    }
+    
+    // Getter/setter patterns commonly used in Flutter
+    if ((name.startsWith('get') || name.startsWith('set')) && name.length > 3 && 
+        name[3] === name[3].toUpperCase()) {
+        return false; // These are often custom getters/setters, can be renamed
+    }
+    
+    // Methods ending with common Flutter suffixes
+    if (name.endsWith('Builder') || name.endsWith('Delegate') || name.endsWith('Handler')) {
+        return true;
+    }
+    
+    return false;
 }
 
 function generateObfuscatedName(): string {

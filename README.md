@@ -15,6 +15,7 @@ A VSCode extension that leverages the IDE's API to iterate through and print all
 - **Auto-activation**: Auto-runs when a Dart project is opened
 - **Manual Commands**: Two commands available via Command Palette
 - **Code Obfuscation**: Applies IDE's rename refactoring to replace symbol names with random alphanumeric names (3-12 characters)
+- **Flutter-Aware**: Automatically detects and preserves Flutter framework methods to maintain app functionality
 
 ## Usage
 
@@ -55,10 +56,17 @@ The extension attempts to rename all symbol types including:
 - **TypeDefs** - Type aliases
 
 #### Symbols Automatically Skipped
-- Built-in Dart methods (`toString`, `hashCode`, `operator==`, etc.)
-- Entry points (`main` function)
-- File/Module/Package symbols
-- Primitive types and literals
+- **Dart Built-ins**: `toString`, `hashCode`, `operator==`, `runtimeType`, `noSuchMethod`, etc.
+- **Entry Points**: `main` function
+- **Flutter Framework Methods**: 
+  - Widget lifecycle: `build`, `initState`, `dispose`, `didChangeDependencies`, `didUpdateWidget`
+  - State management: `setState`, `createState`, `mounted`, `widget`, `context`
+  - Callbacks: `onPressed`, `onTap`, `onChanged`, `validator`, `builder`
+  - Animation: `addListener`, `removeListener`, `forward`, `reverse`, `animateTo`
+  - Navigation: `push`, `pop`, `pushReplacement`, `pushNamed`
+  - Common patterns: `copyWith`, `lerp`, `of`, `maybeOf`
+- **Pattern-based Detection**: Methods starting with `didChange`, `on` (callbacks), ending with `Builder`/`Delegate`/`Handler`
+- **File/Module/Package** symbols and primitive types
 
 ### Viewing Output
 Symbol information is displayed in VSCode's Output panel under "Dart Symbol Printer". The extension automatically opens this output channel when scanning symbols.
@@ -122,7 +130,9 @@ Processing workspace: dart_example
     ✓ Successfully obfuscated to Kx9mPq4
   Obfuscating Method: fromJson -> pL3vK9mN
     ✓ Successfully obfuscated to pL3vK9mN
-  Skipping Method: toString (non-renameable type or special symbol)
+  Skipping Method: toString (Flutter framework or built-in method)
+  Skipping Method: build (Flutter framework or built-in method)
+  Skipping Method: initState (Flutter framework or built-in method)
   Obfuscating Method: updateActiveStatus -> qR7sT2nM
     ✓ Successfully obfuscated to qR7sT2nM
 
