@@ -143,6 +143,7 @@ async function refactorSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode
         
         // Skip symbol types that typically cannot be renamed
         const nonRenameableTypes = [
+            vscode.SymbolKind.Constructor,
             vscode.SymbolKind.File,
             vscode.SymbolKind.Module,
             vscode.SymbolKind.Namespace,
@@ -166,6 +167,9 @@ async function refactorSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode
             'deactivate', 'activate', 'didChangeAppLifecycleState', 'didHaveMemoryPressure',
             'didChangeAccessibilityFeatures', 'didChangeTextScaleFactor', 'didChangeLocales',
             'didChangePlatformBrightness', 'didChangeMetrics', 'createState',
+
+            // Flutter CustomPaint overide method
+            'paint', 'shouldRepaint',
             
             // Flutter State methods
             'setState', 'mounted', 'widget', 'context',
