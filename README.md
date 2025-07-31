@@ -1,6 +1,6 @@
-# Dart Symbol Printer VSCode Extension
+# Dart Code Obfuscator VSCode Extension
 
-A VSCode extension that leverages the IDE's API to iterate through and print all symbols in a Dart project.
+A VSCode extension that leverages the IDE's API to iterate through and print all symbols in a Dart project, and obfuscate code by renaming symbols with random names.
 
 ## Features
 
@@ -14,7 +14,7 @@ A VSCode extension that leverages the IDE's API to iterate through and print all
 - **Hierarchical Support**: Supports nested symbols (methods within classes, etc.)
 - **Auto-activation**: Auto-runs when a Dart project is opened
 - **Manual Commands**: Two commands available via Command Palette
-- **Refactoring**: Applies IDE's rename refactoring to add "prefix_" to all renameable symbols
+- **Code Obfuscation**: Applies IDE's rename refactoring to replace symbol names with random alphanumeric names (3-12 characters)
 
 ## Usage
 
@@ -29,17 +29,19 @@ Use the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and run:
 Print Dart Symbols
 ```
 
-**Refactor Symbols:**
+**Obfuscate Code:**
 ```
-Refactor All Dart Symbols (Add prefix_)
+Obfuscate Dart Code (Random Names)
 ```
 
 This command will:
 - Find all renameable symbols in your Dart project (classes, methods, functions, variables, fields, etc.)
-- Use VSCode's rename refactoring to add "prefix_" to their names
+- Generate random alphanumeric names (3-12 characters, starting with a letter)
+- Use VSCode's rename refactoring to replace original names with random names
 - Update all references throughout the codebase
-- Skip symbols that already have the prefix or cannot be renamed
-- Handle built-in symbols and special methods gracefully
+- Ensure no duplicate names are generated
+- Skip symbols that cannot be renamed (built-in methods, special symbols)
+- Provide comprehensive obfuscation for code protection
 
 #### Symbol Types Supported
 The extension attempts to rename all symbol types including:
@@ -101,39 +103,39 @@ Class: User (5:1-81:2)
 === SYMBOL DISCOVERY COMPLETE ===
 ```
 
-### Refactoring Output
+### Obfuscation Output
 ```
-=== DART SYMBOL REFACTORING ===
-Starting symbol refactoring...
-Adding "prefix_" to all renameable symbols...
+=== DART CODE OBFUSCATION ===
+Starting symbol obfuscation...
+Renaming all renameable symbols with random names...
 
 Processing workspace: dart_example
 
 --- File: lib/models/user.dart ---
-  Attempting to rename Class: User -> prefix_User
-    ✓ Successfully renamed to prefix_User
-  Attempting to rename Field: id -> prefix_id
-    ✓ Successfully renamed to prefix_id
-  Attempting to rename Field: name -> prefix_name
-    ✓ Successfully renamed to prefix_name
-  Attempting to rename Constructor: User -> prefix_User
-    ✓ Successfully renamed to prefix_User
-  Attempting to rename Method: fromJson -> prefix_fromJson
-    ✓ Successfully renamed to prefix_fromJson
+  Obfuscating Class: User -> Kx9mPq4
+    ✓ Successfully obfuscated to Kx9mPq4
+  Obfuscating Field: id -> aB7N
+    ✓ Successfully obfuscated to aB7N
+  Obfuscating Field: name -> ZtR8wX
+    ✓ Successfully obfuscated to ZtR8wX
+  Obfuscating Constructor: User -> Kx9mPq4
+    ✓ Successfully obfuscated to Kx9mPq4
+  Obfuscating Method: fromJson -> pL3vK9mN
+    ✓ Successfully obfuscated to pL3vK9mN
   Skipping Method: toString (non-renameable type or special symbol)
-  Attempting to rename Method: updateActiveStatus -> prefix_updateActiveStatus
-    ✓ Successfully renamed to prefix_updateActiveStatus
+  Obfuscating Method: updateActiveStatus -> qR7sT2nM
+    ✓ Successfully obfuscated to qR7sT2nM
 
 --- File: lib/services/user_service.dart ---
-  Attempting to rename Class: UserService -> prefix_UserService
-    ✓ Successfully renamed to prefix_UserService
-  Attempting to rename Method: getAllUsers -> prefix_getAllUsers
-    ✓ Successfully renamed to prefix_getAllUsers
-  Attempting to rename Function: generateUserId -> prefix_generateUserId
-    ✓ Successfully renamed to prefix_generateUserId
+  Obfuscating Class: UserService -> yU5hJ8
+    ✓ Successfully obfuscated to yU5hJ8
+  Obfuscating Method: getAllUsers -> nK6fD9vB
+    ✓ Successfully obfuscated to nK6fD9vB
+  Obfuscating Function: generateUserId -> mH3tL7pQ
+    ✓ Successfully obfuscated to mH3tL7pQ
 
-=== REFACTORING COMPLETE ===
-Total symbols renamed: 12
+=== OBFUSCATION COMPLETE ===
+Total symbols obfuscated: 12
 ```
 
 ## Demo
@@ -150,7 +152,14 @@ Run `node test_symbols.js` to see a simplified version of what the extension det
 
 ## Technical Details
 
-The extension uses VSCode's `vscode.executeDocumentSymbolProvider` command to get symbols for each Dart file. This leverages the same symbol information that powers VSCode's outline view and other navigation features.
+The extension uses VSCode's `vscode.executeDocumentSymbolProvider` command to get symbols for each Dart file, and `vscode.executeDocumentRenameProvider` for safe obfuscation. This leverages the same symbol information and rename functionality that powers VSCode's outline view and refactoring features.
+
+### Obfuscation Algorithm
+- Generates random names with length 3-12 characters
+- Always starts with a letter (a-z, A-Z) for valid identifier compliance
+- Remaining characters can be letters or numbers (a-z, A-Z, 0-9)
+- Maintains a unique names registry to prevent collisions
+- Falls back to timestamp suffix if collision detection fails
 
 ### Key Components
 

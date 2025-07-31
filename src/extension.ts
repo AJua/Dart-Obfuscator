@@ -1,13 +1,14 @@
 import * as vscode from 'vscode';
 
 let outputChannel: vscode.OutputChannel;
+let usedNames = new Set<string>();
 
 export async function activate(context: vscode.ExtensionContext) {
     // Create output channel for displaying results in user's VSCode
-    outputChannel = vscode.window.createOutputChannel('Dart Symbol Printer');
+    outputChannel = vscode.window.createOutputChannel('Dart Code Obfuscator');
     context.subscriptions.push(outputChannel);
 
-    outputChannel.appendLine('Dart Symbol Printer extension is now active!');
+    outputChannel.appendLine('Dart Code Obfuscator extension is now active!');
 
     let printDisposable = vscode.commands.registerCommand('dart-symbol-printer.printSymbols', async () => {
         await printAllDartSymbols();
@@ -46,7 +47,7 @@ async function printAllDartSymbols() {
     }
 
     outputChannel.appendLine('\n=== SYMBOL DISCOVERY COMPLETE ===');
-    vscode.window.showInformationMessage('Dart symbols printed to Output panel (Dart Symbol Printer)');
+    vscode.window.showInformationMessage('Dart symbols printed to Output panel (Dart Code Obfuscator)');
 }
 
 async function refactorAllDartSymbols() {
@@ -60,9 +61,12 @@ async function refactorAllDartSymbols() {
     outputChannel.clear();
     outputChannel.show();
 
-    outputChannel.appendLine('=== DART SYMBOL REFACTORING ===');
-    outputChannel.appendLine('Starting symbol refactoring...');
-    outputChannel.appendLine('Adding "prefix_" to all renameable symbols...');
+    // Clear used names set for fresh obfuscation
+    usedNames.clear();
+
+    outputChannel.appendLine('=== DART CODE OBFUSCATION ===');
+    outputChannel.appendLine('Starting symbol obfuscation...');
+    outputChannel.appendLine('Renaming all renameable symbols with random names...');
 
     let totalRenamed = 0;
 
@@ -72,9 +76,9 @@ async function refactorAllDartSymbols() {
         totalRenamed += renamedCount;
     }
 
-    outputChannel.appendLine(`\n=== REFACTORING COMPLETE ===`);
-    outputChannel.appendLine(`Total symbols renamed: ${totalRenamed}`);
-    vscode.window.showInformationMessage(`Refactoring complete! Renamed ${totalRenamed} symbols. Check Output panel for details.`);
+    outputChannel.appendLine(`\n=== OBFUSCATION COMPLETE ===`);
+    outputChannel.appendLine(`Total symbols obfuscated: ${totalRenamed}`);
+    vscode.window.showInformationMessage(`Obfuscation complete! Obfuscated ${totalRenamed} symbols. Check Output panel for details.`);
 }
 
 async function processWorkspaceFolder(folder: vscode.WorkspaceFolder, shouldRefactor: boolean): Promise<number> {
@@ -158,44 +162,78 @@ async function refactorSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode
         if (nonRenameableTypes.includes(symbol.kind) || skipNames.includes(symbol.name)) {
             outputChannel.appendLine(`  Skipping ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} (non-renameable type or special symbol)`);
         } else {
-            const newName = `prefix_${symbol.name}`;
+            // Generate random obfuscated name
+            const newName = generateObfuscatedName();
             
-            // Skip if already has prefix
-            if (symbol.name.startsWith('prefix_')) {
-                outputChannel.appendLine(`  Skipping ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} (already has prefix)`);
-            } else {
-                try {
-                    outputChannel.appendLine(`  Attempting to rename ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} -> ${newName}`);
-                    
-                    // Use VSCode's rename provider to rename the symbol
-                    const position = symbol.selectionRange.start;
-                    const workspaceEdit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
-                        'vscode.executeDocumentRenameProvider',
-                        fileUri,
-                        position,
-                        newName
-                    );
-                    
-                    if (workspaceEdit) {
-                        const success = await vscode.workspace.applyEdit(workspaceEdit);
-                        if (success) {
-                            renamedCount++;
-                            outputChannel.appendLine(`    ✓ Successfully renamed to ${newName}`);
-                        } else {
-                            outputChannel.appendLine(`    ✗ Failed to apply rename for ${symbol.name}`);
-                        }
+            try {
+                outputChannel.appendLine(`  Obfuscating ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} -> ${newName}`);
+                
+                // Use VSCode's rename provider to rename the symbol
+                const position = symbol.selectionRange.start;
+                const workspaceEdit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+                    'vscode.executeDocumentRenameProvider',
+                    fileUri,
+                    position,
+                    newName
+                );
+                
+                if (workspaceEdit) {
+                    const success = await vscode.workspace.applyEdit(workspaceEdit);
+                    if (success) {
+                        renamedCount++;
+                        outputChannel.appendLine(`    ✓ Successfully obfuscated to ${newName}`);
                     } else {
-                        outputChannel.appendLine(`    ✗ No rename edit provided for ${symbol.name} (symbol may not be renameable)`);
+                        outputChannel.appendLine(`    ✗ Failed to apply obfuscation for ${symbol.name}`);
+                        // Remove the name from used set since it wasn't actually used
+                        usedNames.delete(newName);
                     }
-                    
-                } catch (error) {
-                    outputChannel.appendLine(`    ✗ Error renaming ${symbol.name}: ${error}`);
+                } else {
+                    outputChannel.appendLine(`    ✗ No rename edit provided for ${symbol.name} (symbol may not be renameable)`);
+                    // Remove the name from used set since it wasn't actually used
+                    usedNames.delete(newName);
                 }
+                
+            } catch (error) {
+                outputChannel.appendLine(`    ✗ Error obfuscating ${symbol.name}: ${error}`);
+                // Remove the name from used set since it wasn't actually used
+                usedNames.delete(newName);
             }
         }
     }
     
     return renamedCount;
+}
+
+function generateObfuscatedName(): string {
+    const letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const alphanumeric = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    
+    let name: string;
+    let attempts = 0;
+    const maxAttempts = 1000;
+    
+    do {
+        // Generate random length between 3 and 12
+        const length = Math.floor(Math.random() * 10) + 3;
+        
+        // Start with a letter
+        name = letters.charAt(Math.floor(Math.random() * letters.length));
+        
+        // Add remaining characters (letters or numbers)
+        for (let i = 1; i < length; i++) {
+            name += alphanumeric.charAt(Math.floor(Math.random() * alphanumeric.length));
+        }
+        
+        attempts++;
+        if (attempts >= maxAttempts) {
+            // Fallback: add timestamp to ensure uniqueness
+            name = name + Date.now().toString().slice(-4);
+            break;
+        }
+    } while (usedNames.has(name));
+    
+    usedNames.add(name);
+    return name;
 }
 
 function printSymbols(symbols: vscode.DocumentSymbol[], indent: number) {
