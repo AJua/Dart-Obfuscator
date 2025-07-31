@@ -18,6 +18,10 @@
       {
         "command": "dart-symbol-printer.printSymbols",
         "title": "Print Dart Symbols"
+      },
+      {
+        "command": "dart-symbol-printer.refactorSymbols",
+        "title": "Refactor Dart Symbols (Add prefix_)"
       }
     ]
   },

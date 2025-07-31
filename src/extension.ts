@@ -9,11 +9,16 @@ export async function activate(context: vscode.ExtensionContext) {
 
     outputChannel.appendLine('Dart Symbol Printer extension is now active!');
 
-    let disposable = vscode.commands.registerCommand('dart-symbol-printer.printSymbols', async () => {
+    let printDisposable = vscode.commands.registerCommand('dart-symbol-printer.printSymbols', async () => {
         await printAllDartSymbols();
     });
 
-    context.subscriptions.push(disposable);
+    let refactorDisposable = vscode.commands.registerCommand('dart-symbol-printer.refactorSymbols', async () => {
+        await refactorAllDartSymbols();
+    });
+
+    context.subscriptions.push(printDisposable);
+    context.subscriptions.push(refactorDisposable);
 
     // Auto-run when a Dart project is opened
     if (vscode.workspace.workspaceFolders) {
@@ -37,25 +42,60 @@ async function printAllDartSymbols() {
 
     for (const folder of workspaceFolders) {
         outputChannel.appendLine(`\nProcessing workspace: ${folder.name}`);
-        await processWorkspaceFolder(folder);
+        await processWorkspaceFolder(folder, false);
     }
 
     outputChannel.appendLine('\n=== SYMBOL DISCOVERY COMPLETE ===');
     vscode.window.showInformationMessage('Dart symbols printed to Output panel (Dart Symbol Printer)');
 }
 
-async function processWorkspaceFolder(folder: vscode.WorkspaceFolder) {
+async function refactorAllDartSymbols() {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+        vscode.window.showErrorMessage('No workspace folder found');
+        return;
+    }
+
+    // Clear previous output and show the output channel
+    outputChannel.clear();
+    outputChannel.show();
+
+    outputChannel.appendLine('=== DART SYMBOL REFACTORING ===');
+    outputChannel.appendLine('Starting symbol refactoring...');
+    outputChannel.appendLine('Adding "prefix_" to Class and Method symbols...');
+
+    let totalRenamed = 0;
+
+    for (const folder of workspaceFolders) {
+        outputChannel.appendLine(`\nProcessing workspace: ${folder.name}`);
+        const renamedCount = await processWorkspaceFolder(folder, true);
+        totalRenamed += renamedCount;
+    }
+
+    outputChannel.appendLine(`\n=== REFACTORING COMPLETE ===`);
+    outputChannel.appendLine(`Total symbols renamed: ${totalRenamed}`);
+    vscode.window.showInformationMessage(`Refactoring complete! Renamed ${totalRenamed} symbols. Check Output panel for details.`);
+}
+
+async function processWorkspaceFolder(folder: vscode.WorkspaceFolder, shouldRefactor: boolean): Promise<number> {
     const pattern = new vscode.RelativePattern(folder, '**/*.dart');
     const dartFiles = await vscode.workspace.findFiles(pattern);
 
     outputChannel.appendLine(`Found ${dartFiles.length} Dart files in ${folder.name}`);
 
+    let totalRenamed = 0;
+
     for (const fileUri of dartFiles) {
-        await processFile(fileUri);
+        const renamedCount = await processFile(fileUri, shouldRefactor);
+        totalRenamed += renamedCount;
     }
+
+    return totalRenamed;
 }
 
-async function processFile(fileUri: vscode.Uri) {
+async function processFile(fileUri: vscode.Uri, shouldRefactor: boolean = false): Promise<number> {
+    let renamedCount = 0;
+    
     try {
         const document = await vscode.workspace.openTextDocument(fileUri);
         const relativePath = vscode.workspace.asRelativePath(fileUri);
@@ -69,7 +109,11 @@ async function processFile(fileUri: vscode.Uri) {
         );
 
         if (symbols && symbols.length > 0) {
-            printSymbols(symbols, 0);
+            if (shouldRefactor) {
+                renamedCount = await refactorSymbols(symbols, fileUri, document);
+            } else {
+                printSymbols(symbols, 0);
+            }
         } else {
             outputChannel.appendLine('  No symbols found');
         }
@@ -77,6 +121,63 @@ async function processFile(fileUri: vscode.Uri) {
     } catch (error) {
         outputChannel.appendLine(`Error processing ${fileUri.fsPath}: ${error}`);
     }
+
+    return renamedCount;
+}
+
+async function refactorSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode.Uri, document: vscode.TextDocument): Promise<number> {
+    let renamedCount = 0;
+    
+    // Process symbols in reverse order to avoid position shifts
+    const sortedSymbols = [...symbols].sort((a, b) => b.range.start.line - a.range.start.line);
+    
+    for (const symbol of sortedSymbols) {
+        // Recursively process child symbols first
+        if (symbol.children && symbol.children.length > 0) {
+            renamedCount += await refactorSymbols(symbol.children, fileUri, document);
+        }
+        
+        // Check if this symbol should be renamed (Class or Method)
+        if (symbol.kind === vscode.SymbolKind.Class || symbol.kind === vscode.SymbolKind.Method) {
+            const newName = `prefix_${symbol.name}`;
+            
+            // Skip if already has prefix
+            if (symbol.name.startsWith('prefix_')) {
+                outputChannel.appendLine(`  Skipping ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} (already has prefix)`);
+                continue;
+            }
+            
+            try {
+                outputChannel.appendLine(`  Renaming ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} -> ${newName}`);
+                
+                // Use VSCode's rename provider to rename the symbol
+                const position = symbol.selectionRange.start;
+                const workspaceEdit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+                    'vscode.executeDocumentRenameProvider',
+                    fileUri,
+                    position,
+                    newName
+                );
+                
+                if (workspaceEdit) {
+                    const success = await vscode.workspace.applyEdit(workspaceEdit);
+                    if (success) {
+                        renamedCount++;
+                        outputChannel.appendLine(`    ✓ Successfully renamed to ${newName}`);
+                    } else {
+                        outputChannel.appendLine(`    ✗ Failed to apply rename for ${symbol.name}`);
+                    }
+                } else {
+                    outputChannel.appendLine(`    ✗ No rename edit provided for ${symbol.name}`);
+                }
+                
+            } catch (error) {
+                outputChannel.appendLine(`    ✗ Error renaming ${symbol.name}: ${error}`);
+            }
+        }
+    }
+    
+    return renamedCount;
 }
 
 function printSymbols(symbols: vscode.DocumentSymbol[], indent: number) {

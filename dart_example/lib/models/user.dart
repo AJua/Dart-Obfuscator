@@ -1,19 +1,17 @@
-import 'package:meta/meta.dart';
-
 /// A user model class
 class User {
   /// User's unique identifier
   final String id;
-  
+
   /// User's display name
   final String name;
-  
+
   /// User's email address
   final String email;
-  
+
   /// User's age
   final int age;
-  
+
   /// Whether the user is active
   bool isActive;
 
@@ -58,10 +56,7 @@ class User {
 
   /// Validates user data
   bool get isValid {
-    return id.isNotEmpty && 
-           name.isNotEmpty && 
-           email.contains('@') && 
-           age > 0;
+    return id.isNotEmpty && name.isNotEmpty && email.contains('@') && age > 0;
   }
 
   @override
