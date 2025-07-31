@@ -62,7 +62,7 @@ async function refactorAllDartSymbols() {
 
     outputChannel.appendLine('=== DART SYMBOL REFACTORING ===');
     outputChannel.appendLine('Starting symbol refactoring...');
-    outputChannel.appendLine('Adding "prefix_" to Class and Method symbols...');
+    outputChannel.appendLine('Adding "prefix_" to all renameable symbols...');
 
     let totalRenamed = 0;
 
@@ -137,42 +137,60 @@ async function refactorSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode
             renamedCount += await refactorSymbols(symbol.children, fileUri, document);
         }
         
-        // Check if this symbol should be renamed (Class or Method)
-        if (symbol.kind === vscode.SymbolKind.Class || symbol.kind === vscode.SymbolKind.Method) {
+        // Skip symbol types that typically cannot be renamed
+        const nonRenameableTypes = [
+            vscode.SymbolKind.File,
+            vscode.SymbolKind.Module,
+            vscode.SymbolKind.Namespace,
+            vscode.SymbolKind.Package,
+            vscode.SymbolKind.String,
+            vscode.SymbolKind.Number,
+            vscode.SymbolKind.Boolean,
+            vscode.SymbolKind.Array,
+            vscode.SymbolKind.Object,
+            vscode.SymbolKind.Key,
+            vscode.SymbolKind.Null
+        ];
+
+        // Skip built-in or special symbols that shouldn't be renamed
+        const skipNames = ['main', 'toString', 'hashCode', 'operator==', 'runtimeType', 'noSuchMethod'];
+        
+        if (nonRenameableTypes.includes(symbol.kind) || skipNames.includes(symbol.name)) {
+            outputChannel.appendLine(`  Skipping ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} (non-renameable type or special symbol)`);
+        } else {
             const newName = `prefix_${symbol.name}`;
             
             // Skip if already has prefix
             if (symbol.name.startsWith('prefix_')) {
                 outputChannel.appendLine(`  Skipping ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} (already has prefix)`);
-                continue;
-            }
-            
-            try {
-                outputChannel.appendLine(`  Renaming ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} -> ${newName}`);
-                
-                // Use VSCode's rename provider to rename the symbol
-                const position = symbol.selectionRange.start;
-                const workspaceEdit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
-                    'vscode.executeDocumentRenameProvider',
-                    fileUri,
-                    position,
-                    newName
-                );
-                
-                if (workspaceEdit) {
-                    const success = await vscode.workspace.applyEdit(workspaceEdit);
-                    if (success) {
-                        renamedCount++;
-                        outputChannel.appendLine(`    ✓ Successfully renamed to ${newName}`);
+            } else {
+                try {
+                    outputChannel.appendLine(`  Attempting to rename ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} -> ${newName}`);
+                    
+                    // Use VSCode's rename provider to rename the symbol
+                    const position = symbol.selectionRange.start;
+                    const workspaceEdit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+                        'vscode.executeDocumentRenameProvider',
+                        fileUri,
+                        position,
+                        newName
+                    );
+                    
+                    if (workspaceEdit) {
+                        const success = await vscode.workspace.applyEdit(workspaceEdit);
+                        if (success) {
+                            renamedCount++;
+                            outputChannel.appendLine(`    ✓ Successfully renamed to ${newName}`);
+                        } else {
+                            outputChannel.appendLine(`    ✗ Failed to apply rename for ${symbol.name}`);
+                        }
                     } else {
-                        outputChannel.appendLine(`    ✗ Failed to apply rename for ${symbol.name}`);
+                        outputChannel.appendLine(`    ✗ No rename edit provided for ${symbol.name} (symbol may not be renameable)`);
                     }
-                } else {
-                    outputChannel.appendLine(`    ✗ No rename edit provided for ${symbol.name}`);
+                    
+                } catch (error) {
+                    outputChannel.appendLine(`    ✗ Error renaming ${symbol.name}: ${error}`);
                 }
-                
-            } catch (error) {
-                outputChannel.appendLine(`    ✗ Error renaming ${symbol.name}: ${error}`);
             }
         }
     }

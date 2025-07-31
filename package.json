@@ -21,7 +21,7 @@
       },
       {
         "command": "dart-symbol-printer.refactorSymbols",
-        "title": "Refactor Dart Symbols (Add prefix_)"
+        "title": "Refactor All Dart Symbols (Add prefix_)"
       }
     ]
   },
