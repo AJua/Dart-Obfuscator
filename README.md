@@ -2,7 +2,7 @@
 
 A VSCode extension that obfuscates Dart and Flutter code by intelligently renaming symbols with random names while preserving framework functionality.
 
-## Know Issues !!!!!!
+## Known Issues !!!!!!
 
 When renaming a field of class, the contructor with named parameter of its subclass won't be updated and cause compile error.
 Current workaround is don't use `super:field` in the contructor of a subclass or manually fix it.
@@ -30,6 +30,8 @@ Current workaround is don't use `super:field` in the contructor of a subclass or
 2. Open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
 3. Run: **"Obfuscate Dart Code (Random Names)"**
 4. View progress in the "Dart Obfuscator" output panel
+
+![screenshot](/images/screenshot.png)
 
 ### What Gets Obfuscated
 
