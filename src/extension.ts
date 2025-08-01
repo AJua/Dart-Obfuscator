@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 
 let outputChannel: vscode.OutputChannel;
 let usedNames = new Set<string>();
+let symbolMappings = new Map<string, string>();
 
 export async function activate(context: vscode.ExtensionContext) {
     // Create output channel for displaying results in user's VSCode
@@ -29,8 +32,9 @@ async function obfuscateDartCode() {
     outputChannel.clear();
     outputChannel.show();
 
-    // Clear used names set for fresh obfuscation
+    // Clear used names set and symbol mappings for fresh obfuscation
     usedNames.clear();
+    symbolMappings.clear();
 
     outputChannel.appendLine('=== DART CODE OBFUSCATION ===');
     outputChannel.appendLine('Starting symbol obfuscation...');
@@ -44,9 +48,15 @@ async function obfuscateDartCode() {
         totalRenamed += renamedCount;
     }
 
+    // Write symbols mapping to file
+    if (symbolMappings.size > 0) {
+        await writeSymbolsFile();
+    }
+
     outputChannel.appendLine(`\n=== OBFUSCATION COMPLETE ===`);
     outputChannel.appendLine(`Total symbols obfuscated: ${totalRenamed}`);
-    vscode.window.showInformationMessage(`Obfuscation complete! Obfuscated ${totalRenamed} symbols. Check Output panel for details.`);
+    outputChannel.appendLine(`Symbol mappings saved to symbols.txt`);
+    vscode.window.showInformationMessage(`Obfuscation complete! Obfuscated ${totalRenamed} symbols. Symbol mappings saved to symbols.txt.`);
 }
 
 async function processWorkspaceForObfuscation(folder: vscode.WorkspaceFolder): Promise<number> {
@@ -196,6 +206,8 @@ async function obfuscateSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscod
                     const success = await vscode.workspace.applyEdit(workspaceEdit);
                     if (success) {
                         renamedCount++;
+                        // Track the symbol mapping
+                        symbolMappings.set(symbol.name, newName);
                         outputChannel.appendLine(`    ✓ Successfully obfuscated to ${newName}`);
                     } else {
                         outputChannel.appendLine(`    ✗ Failed to apply obfuscation for ${symbol.name}`);
@@ -280,5 +292,35 @@ function generateObfuscatedName(): string {
     return name;
 }
 
+async function writeSymbolsFile(): Promise<void> {
+    try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            outputChannel.appendLine('No workspace folder found for symbols.txt');
+            return;
+        }
+
+        const symbolsFilePath = path.join(workspaceFolder.uri.fsPath, 'symbols.txt');
+        
+        // Create content with original -> obfuscated mappings
+        let content = '# Symbol Obfuscation Mappings\n';
+        content += '# Format: OriginalName -> ObfuscatedName\n';
+        content += `# Generated: ${new Date().toISOString()}\n\n`;
+        
+        // Sort mappings alphabetically by original name for better readability
+        const sortedMappings = Array.from(symbolMappings.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+        
+        for (const [originalName, obfuscatedName] of sortedMappings) {
+            content += `${originalName} -> ${obfuscatedName}\n`;
+        }
+        
+        // Write to file
+        await fs.promises.writeFile(symbolsFilePath, content, 'utf8');
+        outputChannel.appendLine(`Symbol mappings written to: ${symbolsFilePath}`);
+        
+    } catch (error) {
+        outputChannel.appendLine(`Error writing symbols.txt: ${error}`);
+    }
+}
 
 export function deactivate() {}
