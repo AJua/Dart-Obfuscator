@@ -3,6 +3,7 @@
   "displayName": "Dart Obfuscator", 
   "description": "Obfuscates Dart code by renaming symbols with random names",
   "version": "1.0.0",
+  "publisher": "linchienhung",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -12,14 +13,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/username/dart-obfuscator.git"
+    "url": "https://github.com/AJua/Dart-Obfuscator"
   },
   "keywords": [
     "dart",
     "flutter",
     "obfuscation",
-    "code-protection",
-    "refactoring"
+    "code-protection"
   ],
   "activationEvents": [
     "onLanguage:dart"
@@ -29,7 +29,7 @@
     "commands": [
       {
         "command": "dart-obfuscator.obfuscateCode",
-        "title": "Obfuscate Dart Code (Random Names)"
+        "title": "Obfuscate Dart Code"
       }
     ]
   },
