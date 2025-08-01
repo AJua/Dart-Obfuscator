@@ -1,4 +1,4 @@
-# Dart Code Obfuscator
+# Dart Obfuscator
 
 A VSCode extension that obfuscates Dart and Flutter code by intelligently renaming symbols with random names while preserving framework functionality.
 
@@ -24,7 +24,7 @@ A VSCode extension that obfuscates Dart and Flutter code by intelligently renami
 1. Open a Dart/Flutter project in VSCode
 2. Open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
 3. Run: **"Obfuscate Dart Code (Random Names)"**
-4. View progress in the "Dart Code Obfuscator" output panel
+4. View progress in the "Dart Obfuscator" output panel
 
 ### What Gets Obfuscated
 
@@ -93,7 +93,7 @@ No configuration required - works out of the box with sensible defaults.
 
 ## Contributing
 
-Issues and pull requests are welcome! Please visit our [GitHub repository](https://github.com/username/dart-code-obfuscator).
+Issues and pull requests are welcome! Please visit our [GitHub repository](https://github.com/username/dart-obfuscator).
 
 ## License
 

@@ -5,12 +5,12 @@ let usedNames = new Set<string>();
 
 export async function activate(context: vscode.ExtensionContext) {
     // Create output channel for displaying results in user's VSCode
-    outputChannel = vscode.window.createOutputChannel('Dart Code Obfuscator');
+    outputChannel = vscode.window.createOutputChannel('Dart Obfuscator');
     context.subscriptions.push(outputChannel);
 
-    outputChannel.appendLine('Dart Code Obfuscator extension is now active!');
+    outputChannel.appendLine('Dart Obfuscator extension is now active!');
 
-    let obfuscateDisposable = vscode.commands.registerCommand('dart-code-obfuscator.obfuscateCode', async () => {
+    let obfuscateDisposable = vscode.commands.registerCommand('dart-obfuscator.obfuscateCode', async () => {
         await obfuscateDartCode();
     });
 

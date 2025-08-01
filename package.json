@@ -1,6 +1,6 @@
 {
-  "name": "dart-code-obfuscator",
-  "displayName": "Dart Code Obfuscator", 
+  "name": "dart-obfuscator",
+  "displayName": "Dart Obfuscator", 
   "description": "Obfuscates Dart code by renaming symbols with random names",
   "version": "1.0.0",
   "engines": {
@@ -12,7 +12,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/username/dart-code-obfuscator.git"
+    "url": "https://github.com/username/dart-obfuscator.git"
   },
   "keywords": [
     "dart",
@@ -28,7 +28,7 @@
   "contributes": {
     "commands": [
       {
-        "command": "dart-code-obfuscator.obfuscateCode",
+        "command": "dart-obfuscator.obfuscateCode",
         "title": "Obfuscate Dart Code (Random Names)"
       }
     ]
