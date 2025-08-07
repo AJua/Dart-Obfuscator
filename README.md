@@ -1,19 +1,43 @@
-# Dart Obfuscator
+# Code Obfuscator
 
-A VSCode extension that obfuscates Dart and Flutter code by intelligently renaming symbols with random names while preserving framework functionality.
+A VSCode extension that obfuscates code in multiple languages by intelligently renaming symbols with random names while preserving framework functionality.
 
-## Known Issues
+**Supported Languages**: C#, Python, TypeScript/JavaScript, Dart/Flutter
 
-When renaming a field of class, the contructor with named parameter of its subclass won't be updated and cause compile error.
-This issue was due to a Dart LSP server bug in older Flutter versions (like 3.14). The latest Flutter versions have resolved this issue.
+## Prerequisites
+
+**IMPORTANT**: This extension requires language-specific VSCode extensions to function properly. Install the appropriate extension(s) for your target language:
+
+### Required Language Extensions
+
+| Language | Required Extension | Marketplace Link |
+|----------|-------------------|------------------|
+| **C#** | C# Dev Kit or C# | [C# Dev Kit](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csdevkit) |
+| **Python** | Python | [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python) |
+| **TypeScript/JS** | Built-in | No additional extension needed |
+| **Dart/Flutter** | Dart + Flutter | [Dart](https://marketplace.visualstudio.com/items?itemName=Dart-Code.dart-code) + [Flutter](https://marketplace.visualstudio.com/items?itemName=Dart-Code.flutter) |
+
+### Why These Extensions Are Required
+
+This extension uses VSCode's language server APIs (`executeDocumentSymbolProvider` and `executeDocumentRenameProvider`) to:
+- Detect symbols in your code (classes, methods, variables, etc.)
+- Perform safe rename refactoring across all references
+- Preserve framework-specific methods and built-in functions
+
+**Without the proper language extensions, you'll get "No symbols found" errors.**
 
 ## Features
 
-- 🔒 **Code Obfuscation**: Replaces symbol names with random alphanumeric names (3-12 characters)
-- 🎯 **Smart Targeting**: Only processes `/lib` and `/test` folders for faster performance
-- 🛡️ **Flutter-Aware**: Automatically preserves Flutter framework methods to maintain app functionality
+- 🔒 **Multi-Language Support**: C#, Python, TypeScript/JavaScript, Dart/Flutter
+- 🎯 **Smart Language Detection**: Automatically detects your project language (priority: C# > Python > TypeScript > Dart)
+- 🛡️ **Framework-Aware**: Preserves framework methods for each language (.NET, Django/Flask, React/Node.js, Flutter)
 - ⚡ **IDE Integration**: Uses VSCode's built-in rename refactoring for safe, reference-aware obfuscation
-- 🎲 **Collision Prevention**: Ensures unique name generation across the entire codebase
+- 🎲 **Collision Prevention**: Generates unique random names (3-12 characters) across the entire codebase
+- 📊 **Detailed Logging**: Comprehensive output showing what's being obfuscated
+
+## Known Issues
+
+**Dart/Flutter**: When renaming a field of class, the constructor with named parameter of its subclass won't be updated and cause compile error. This issue was due to a Dart LSP server bug in older Flutter versions (like 3.14). The latest Flutter versions have resolved this issue.
 
 ## Installation
 
@@ -26,10 +50,12 @@ This issue was due to a Dart LSP server bug in older Flutter versions (like 3.14
 
 ## Usage
 
-1. Open a Dart/Flutter project in VSCode
-2. Open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-3. Run: **"Obfuscate Dart Code (Random Names)"**
-4. View progress in the "Dart Obfuscator" output panel
+1. **Install Prerequisites**: Make sure you have the required language extension installed (see Prerequisites section above)
+2. **Open Project**: Open a supported project (C#, Python, TypeScript/JS, or Dart/Flutter) in VSCode
+3. **Wait for Language Server**: Allow the language server to fully initialize (you should see symbols in the outline view)
+4. **Run Obfuscation**: Open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run: **"Obfuscate Code"**
+5. **Monitor Progress**: View detailed progress in the "Code Obfuscator" output panel
+6. **Check Results**: Find the symbol mappings in `symbols_{language}.txt` (e.g., `symbols_python.txt`)
 
 ![screenshot](/images/screenshot.png)
 
@@ -46,33 +72,49 @@ The extension renames all user-defined symbols including:
 
 ### What Gets Preserved
 
-Smart detection automatically skips:
-- **Dart Built-ins**: `toString`, `hashCode`, `operator==`, `main`, etc.
-- **Flutter Lifecycle**: `build`, `initState`, `dispose`, `didChangeDependencies`, etc.
-- **Flutter Callbacks**: `onPressed`, `onTap`, `onChanged`, `validator`, etc.
-- **Flutter Patterns**: Methods starting with `didChange`, `on` (callbacks), ending with `Builder`/`Delegate`/`Handler`
-- **Framework Methods**: `setState`, `createState`, `mounted`, `context`, etc.
-- **Animation/Controller**: `addListener`, `forward`, `reverse`, `animateTo`, etc.
-- **Navigation**: `push`, `pop`, `pushReplacement`, `pushNamed`, etc.
-- **Common Patterns**: `copyWith`, `lerp`, `of`, `maybeOf`, etc.
+Language-specific framework detection automatically skips:
+
+**C#/.NET:**
+- Built-ins: `ToString`, `GetHashCode`, `Equals`, `Main`, etc.
+- ASP.NET: `Configure`, `ConfigureServices`, `Startup`, etc.
+- Entity Framework: `OnConfiguring`, `SaveChanges`, etc.
+
+**Python:**
+- Built-ins: `__init__`, `__str__`, `__repr__`, `main`, etc.
+- Django: `save`, `clean`, `get_absolute_url`, etc.
+- Flask: `before_request`, `after_request`, etc.
+
+**TypeScript/JavaScript:**
+- Built-ins: `toString`, `constructor`, etc.
+- React: `render`, `componentDidMount`, `useState`, etc.
+- Node.js: `listen`, `use`, `get`, `post`, etc.
+
+**Dart/Flutter:**
+- Built-ins: `toString`, `hashCode`, `main`, etc.
+- Flutter Lifecycle: `build`, `initState`, `dispose`, etc.
+- Flutter Callbacks: `onPressed`, `onTap`, `validator`, etc.
 
 ## Example Output
 
 ```
-=== DART CODE OBFUSCATION ===
-Processing workspace: my_flutter_app
+=== PYTHON CODE OBFUSCATION ===
+Processing workspace: my_python_app
 
---- File: lib/models/user.dart ---
-  Obfuscating Class: User -> Kx9mPq4
+--- File: main.py ---
+  Requesting symbols for python file...
+  Symbol provider returned: 8 symbols
+  Found symbols: UserRole (Enum), User (Class), UserManager (Class), main (Function)
+  Obfuscating Enum: UserRole -> Kx9mPq4
     ✓ Successfully obfuscated to Kx9mPq4
-  Obfuscating Field: name -> ZtR8wX
+  Obfuscating Class: User -> ZtR8wX
     ✓ Successfully obfuscated to ZtR8wX
-  Skipping Method: build (Flutter framework method)
-  Obfuscating Method: updateProfile -> qR7sT2nM
+  Skipping Method: __init__ (Python framework or built-in method)
+  Obfuscating Method: get_display_name -> qR7sT2nM
     ✓ Successfully obfuscated to qR7sT2nM
 
 === OBFUSCATION COMPLETE ===
-Total symbols obfuscated: 47
+Total symbols obfuscated: 23
+Symbol mappings saved to symbols_python.txt
 ```
 
 ## Benefits

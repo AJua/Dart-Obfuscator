@@ -12,6 +12,25 @@ This is a VSCode extension called "Code Obfuscator" that provides code obfuscati
 3. **TypeScript/JavaScript** - Supports React, Node.js, Angular patterns
 4. **Dart/Flutter** - Original Dart and Flutter support
 
+## Prerequisites
+
+**IMPORTANT**: This extension relies on VSCode language servers for symbol detection and renaming. You must have the appropriate language extensions installed for each language you want to obfuscate:
+
+### Required Language Extensions
+
+- **C#**: [C# Dev Kit](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csdevkit) or [C#](https://marketplace.visualstudio.com/items?itemName=ms-dotnettools.csharp)
+- **Python**: [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python) 
+- **TypeScript/JavaScript**: Built into VSCode (no additional extension needed)
+- **Dart/Flutter**: [Dart](https://marketplace.visualstudio.com/items?itemName=Dart-Code.dart-code) and [Flutter](https://marketplace.visualstudio.com/items?itemName=Dart-Code.flutter)
+
+### Language Server Requirements
+The extension uses `vscode.executeDocumentSymbolProvider` and `vscode.executeDocumentRenameProvider` APIs, which depend on:
+- Properly configured language servers for symbol detection
+- Language server support for rename refactoring operations
+- Active workspace with the target language files
+
+**Without the proper language extensions, the obfuscation will fail with "No symbols found" errors.**
+
 ## Key Commands
 
 ### Build and Development

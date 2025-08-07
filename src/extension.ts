@@ -80,7 +80,7 @@ function initializeLanguageConfigs() {
         name: 'csharp',
         displayName: 'C#',
         fileExtensions: ['.cs'],
-        filePatterns: ['**/*.cs', '!**/bin/**', '!**/obj/**', '!**/packages/**'],
+        filePatterns: ['**/*.cs'],
         skipNames: [
             // .NET built-ins
             'Main', 'ToString', 'GetHashCode', 'Equals', 'GetType', 'Finalize',
@@ -106,7 +106,7 @@ function initializeLanguageConfigs() {
         name: 'python',
         displayName: 'Python',
         fileExtensions: ['.py'],
-        filePatterns: ['**/*.py', '!**/venv/**', '!**/__pycache__/**', '!**/site-packages/**'],
+        filePatterns: ['**/*.py'],
         skipNames: [
             // Python built-ins
             '__init__', '__str__', '__repr__', '__len__', '__getitem__', '__setitem__',
@@ -134,9 +134,7 @@ function initializeLanguageConfigs() {
         name: 'typescript',
         displayName: 'TypeScript/JavaScript',
         fileExtensions: ['.ts', '.tsx', '.js', '.jsx'],
-        filePatterns: ['src/**/*.ts', 'src/**/*.tsx', 'src/**/*.js', 'src/**/*.jsx',
-                      'lib/**/*.ts', 'lib/**/*.tsx', 'lib/**/*.js', 'lib/**/*.jsx',
-                      '!**/node_modules/**', '!**/dist/**', '!**/build/**'],
+        filePatterns: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'],
         skipNames: [
             // JavaScript built-ins
             'toString', 'valueOf', 'hasOwnProperty', 'isPrototypeOf',
@@ -168,7 +166,7 @@ async function obfuscateCode() {
     // Detect language from workspace
     const detectedLanguage = await detectWorkspaceLanguage();
     if (!detectedLanguage) {
-        vscode.window.showErrorMessage('No supported language detected in workspace');
+        vscode.window.showErrorMessage('No supported language detected in workspace. Make sure you have the appropriate language extension installed (Python, C#, TypeScript, or Dart).');
         return;
     }
 
@@ -236,6 +234,21 @@ async function detectWorkspaceLanguage(): Promise<string | null> {
     return null;
 }
 
+function getExcludePatterns(language: string): string[] {
+    switch (language) {
+        case 'python':
+            return ['__pycache__', '.venv', 'venv', 'site-packages', '.git'];
+        case 'csharp':
+            return ['bin', 'obj', 'packages', '.git'];
+        case 'typescript':
+            return ['node_modules', 'dist', 'build', '.git'];
+        case 'dart':
+            return ['.git'];
+        default:
+            return ['.git'];
+    }
+}
+
 async function processWorkspaceForObfuscation(folder: vscode.WorkspaceFolder, langConfig: LanguageConfig): Promise<number> {
     let allFiles: vscode.Uri[] = [];
     let patternCounts: { [pattern: string]: number } = {};
@@ -255,11 +268,18 @@ async function processWorkspaceForObfuscation(folder: vscode.WorkspaceFolder, la
     // Remove duplicates
     allFiles = [...new Map(allFiles.map(file => [file.fsPath, file])).values()];
 
+    // Filter out unwanted directories post-processing
+    const excludePatterns = getExcludePatterns(langConfig.name);
+    allFiles = allFiles.filter(file => {
+        const relativePath = vscode.workspace.asRelativePath(file);
+        return !excludePatterns.some(pattern => relativePath.includes(pattern));
+    });
+
     const patternInfo = Object.entries(patternCounts)
         .map(([pattern, count]) => `${pattern}: ${count}`)
         .join(', ');
     
-    outputChannel.appendLine(`Found ${allFiles.length} ${langConfig.displayName} files in ${folder.name} (${patternInfo})`);
+    outputChannel.appendLine(`Found ${allFiles.length} ${langConfig.displayName} files in ${folder.name} after filtering (${patternInfo})`);
 
     let totalRenamed = 0;
 
@@ -271,6 +291,40 @@ async function processWorkspaceForObfuscation(folder: vscode.WorkspaceFolder, la
     return totalRenamed;
 }
 
+async function getDocumentSymbolsWithRetry(fileUri: vscode.Uri, languageId: string): Promise<vscode.DocumentSymbol[] | null> {
+    const maxRetries = languageId === 'python' ? 3 : 1;
+    const delay = languageId === 'python' ? 500 : 0;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            if (attempt > 1) {
+                outputChannel.appendLine(`    Retry attempt ${attempt}/${maxRetries} for ${languageId} symbols...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+            
+            const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+                'vscode.executeDocumentSymbolProvider',
+                fileUri
+            );
+            
+            if (symbols && symbols.length > 0) {
+                return symbols;
+            }
+            
+            if (attempt === maxRetries) {
+                return symbols; // Return whatever we got on final attempt
+            }
+        } catch (error) {
+            outputChannel.appendLine(`    Error on attempt ${attempt}: ${error}`);
+            if (attempt === maxRetries) {
+                throw error;
+            }
+        }
+    }
+    
+    return null;
+}
+
 async function obfuscateFileSymbols(fileUri: vscode.Uri, langConfig: LanguageConfig): Promise<number> {
     let renamedCount = 0;
     
@@ -280,16 +334,16 @@ async function obfuscateFileSymbols(fileUri: vscode.Uri, langConfig: LanguageCon
         
         outputChannel.appendLine(`\n--- File: ${relativePath} ---`);
 
-        // Get document symbols
-        const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-            'vscode.executeDocumentSymbolProvider',
-            fileUri
-        );
+        // Get document symbols with retry for Python
+        outputChannel.appendLine(`  Requesting symbols for ${document.languageId} file...`);
+        let symbols = await getDocumentSymbolsWithRetry(fileUri, document.languageId);
 
+        outputChannel.appendLine(`  Symbol provider returned: ${symbols ? symbols.length : 'null'} symbols`);
         if (symbols && symbols.length > 0) {
+            outputChannel.appendLine(`  Found symbols: ${symbols.map(s => `${s.name} (${vscode.SymbolKind[s.kind]})`).join(', ')}`);
             renamedCount = await obfuscateSymbols(symbols, fileUri, document, langConfig);
         } else {
-            outputChannel.appendLine('  No symbols found');
+            outputChannel.appendLine('  No symbols found - this might indicate a language server issue');
         }
 
     } catch (error) {
