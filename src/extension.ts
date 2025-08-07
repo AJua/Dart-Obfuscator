@@ -2,32 +2,178 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Language configuration interface
+interface LanguageConfig {
+    name: string;
+    displayName: string;
+    fileExtensions: string[];
+    filePatterns: string[];
+    skipNames: string[];
+    isFrameworkMethod: (symbol: vscode.DocumentSymbol) => boolean;
+}
+
 let outputChannel: vscode.OutputChannel;
 let usedNames = new Set<string>();
 let symbolMappings = new Map<string, string>();
+let supportedLanguages: Map<string, LanguageConfig> = new Map();
 
 export async function activate(context: vscode.ExtensionContext) {
+    // Initialize language configurations
+    initializeLanguageConfigs();
+    
     // Create output channel for displaying results in user's VSCode
-    outputChannel = vscode.window.createOutputChannel('Dart Obfuscator');
+    outputChannel = vscode.window.createOutputChannel('Code Obfuscator');
     context.subscriptions.push(outputChannel);
 
-    outputChannel.appendLine('Dart Obfuscator extension is now active!');
+    outputChannel.appendLine('Code Obfuscator extension is now active!');
 
+    // Register main obfuscation command
     let obfuscateDisposable = vscode.commands.registerCommand('dart-obfuscator.obfuscateCode', async () => {
-        await obfuscateDartCode();
+        await obfuscateCode();
     });
 
     context.subscriptions.push(obfuscateDisposable);
 }
 
 
-async function obfuscateDartCode() {
+function initializeLanguageConfigs() {
+    // Dart/Flutter configuration
+    supportedLanguages.set('dart', {
+        name: 'dart',
+        displayName: 'Dart/Flutter',
+        fileExtensions: ['.dart'],
+        filePatterns: ['lib/**/*.dart', 'test/**/*.dart'],
+        skipNames: [
+            // Dart built-ins
+            'main', 'toString', 'hashCode', 'operator==', 'runtimeType', 'noSuchMethod',
+            // Flutter Widget lifecycle methods
+            'build', 'initState', 'dispose', 'didChangeDependencies', 'didUpdateWidget',
+            'deactivate', 'activate', 'didChangeAppLifecycleState', 'didHaveMemoryPressure',
+            'didChangeAccessibilityFeatures', 'didChangeTextScaleFactor', 'didChangeLocales',
+            'didChangePlatformBrightness', 'didChangeMetrics', 'createState',
+            // Flutter CustomPaint override methods
+            'paint', 'shouldRepaint',
+            // Equatable override
+            'props',
+            // Flutter State methods
+            'setState', 'mounted', 'widget', 'context',
+            // Flutter framework callbacks
+            'onPressed', 'onTap', 'onChanged', 'onSubmitted', 'onEditingComplete',
+            'onFieldSubmitted', 'onSaved', 'validator', 'builder',
+            // Flutter animation methods
+            'addListener', 'removeListener', 'addStatusListener', 'removeStatusListener',
+            'forward', 'reverse', 'reset', 'stop', 'animateTo', 'animateWith',
+            // Flutter controller methods
+            'notifyListeners', 'hasListeners', 'clear', 'text', 'selection', 'value',
+            // Flutter navigation methods
+            'push', 'pop', 'pushReplacement', 'pushNamed', 'popUntil', 'canPop',
+            // Flutter theme and localization
+            'of', 'maybeOf', 'localizationsDelegates', 'supportedLocales',
+            // Common Flutter patterns
+            'copyWith', 'lerp', 'resolve', 'createTween', 'transform'
+        ],
+        isFrameworkMethod: isFlutterFrameworkMethod
+    });
+    
+    // C# configuration
+    supportedLanguages.set('csharp', {
+        name: 'csharp',
+        displayName: 'C#',
+        fileExtensions: ['.cs'],
+        filePatterns: ['**/*.cs', '!**/bin/**', '!**/obj/**', '!**/packages/**'],
+        skipNames: [
+            // .NET built-ins
+            'Main', 'ToString', 'GetHashCode', 'Equals', 'GetType', 'Finalize',
+            'MemberwiseClone', 'ReferenceEquals',
+            // Common override methods
+            'Dispose', 'DisposeAsync', 'Clone',
+            // ASP.NET Core
+            'Configure', 'ConfigureServices', 'Startup',
+            // Entity Framework
+            'OnConfiguring', 'OnModelCreating', 'SaveChanges', 'SaveChangesAsync',
+            // Common interface methods
+            'CompareTo', 'CopyTo', 'MoveTo',
+            // Event handlers (common patterns)
+            'OnClick', 'OnLoad', 'OnClosing', 'OnClosed',
+            // WPF/WinForms
+            'InitializeComponent', 'OnApplyTemplate'
+        ],
+        isFrameworkMethod: isCSharpFrameworkMethod
+    });
+    
+    // Python configuration
+    supportedLanguages.set('python', {
+        name: 'python',
+        displayName: 'Python',
+        fileExtensions: ['.py'],
+        filePatterns: ['**/*.py', '!**/venv/**', '!**/__pycache__/**', '!**/site-packages/**'],
+        skipNames: [
+            // Python built-ins
+            '__init__', '__str__', '__repr__', '__len__', '__getitem__', '__setitem__',
+            '__delitem__', '__iter__', '__next__', '__enter__', '__exit__',
+            '__call__', '__getattr__', '__setattr__', '__delattr__',
+            '__eq__', '__ne__', '__lt__', '__le__', '__gt__', '__ge__',
+            '__hash__', '__bool__', '__bytes__', '__format__',
+            '__add__', '__sub__', '__mul__', '__truediv__', '__floordiv__',
+            '__mod__', '__pow__', '__and__', '__or__', '__xor__',
+            '__lshift__', '__rshift__', '__invert__',
+            'main', 'setUp', 'tearDown', 'setUpClass', 'tearDownClass',
+            // Django
+            'save', 'delete', 'clean', 'full_clean', 'get_absolute_url',
+            'get_queryset', 'get_object', 'get_context_data',
+            // Flask
+            'before_request', 'after_request', 'teardown_request',
+            // Common patterns
+            'run', 'start', 'stop', 'close', 'open'
+        ],
+        isFrameworkMethod: isPythonFrameworkMethod
+    });
+    
+    // TypeScript/JavaScript configuration
+    supportedLanguages.set('typescript', {
+        name: 'typescript',
+        displayName: 'TypeScript/JavaScript',
+        fileExtensions: ['.ts', '.tsx', '.js', '.jsx'],
+        filePatterns: ['src/**/*.ts', 'src/**/*.tsx', 'src/**/*.js', 'src/**/*.jsx',
+                      'lib/**/*.ts', 'lib/**/*.tsx', 'lib/**/*.js', 'lib/**/*.jsx',
+                      '!**/node_modules/**', '!**/dist/**', '!**/build/**'],
+        skipNames: [
+            // JavaScript built-ins
+            'toString', 'valueOf', 'hasOwnProperty', 'isPrototypeOf',
+            'propertyIsEnumerable', 'constructor',
+            // React lifecycle
+            'componentDidMount', 'componentDidUpdate', 'componentWillUnmount',
+            'componentDidCatch', 'getSnapshotBeforeUpdate', 'shouldComponentUpdate',
+            'render', 'setState', 'forceUpdate',
+            // React hooks (common patterns)
+            'useEffect', 'useState', 'useContext', 'useReducer', 'useMemo', 'useCallback',
+            // Node.js
+            'main', 'start', 'stop', 'close', 'listen',
+            // Express.js
+            'middleware', 'use', 'get', 'post', 'put', 'delete', 'patch',
+            // Common patterns
+            'init', 'destroy', 'dispose', 'cleanup'
+        ],
+        isFrameworkMethod: isTypeScriptFrameworkMethod
+    });
+}
+
+async function obfuscateCode() {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders) {
         vscode.window.showErrorMessage('No workspace folder found');
         return;
     }
 
+    // Detect language from workspace
+    const detectedLanguage = await detectWorkspaceLanguage();
+    if (!detectedLanguage) {
+        vscode.window.showErrorMessage('No supported language detected in workspace');
+        return;
+    }
+
+    const langConfig = supportedLanguages.get(detectedLanguage)!;
+    
     // Clear previous output and show the output channel
     outputChannel.clear();
     outputChannel.show();
@@ -36,7 +182,7 @@ async function obfuscateDartCode() {
     usedNames.clear();
     symbolMappings.clear();
 
-    outputChannel.appendLine('=== DART CODE OBFUSCATION ===');
+    outputChannel.appendLine(`=== ${langConfig.displayName.toUpperCase()} CODE OBFUSCATION ===`);
     outputChannel.appendLine('Starting symbol obfuscation...');
     outputChannel.appendLine('Renaming all renameable symbols with random names...');
 
@@ -44,43 +190,88 @@ async function obfuscateDartCode() {
 
     for (const folder of workspaceFolders) {
         outputChannel.appendLine(`\nProcessing workspace: ${folder.name}`);
-        const renamedCount = await processWorkspaceForObfuscation(folder);
+        const renamedCount = await processWorkspaceForObfuscation(folder, langConfig);
         totalRenamed += renamedCount;
     }
 
     // Write symbols mapping to file
     if (symbolMappings.size > 0) {
-        await writeSymbolsFile();
+        await writeSymbolsFile(detectedLanguage);
     }
 
     outputChannel.appendLine(`\n=== OBFUSCATION COMPLETE ===`);
     outputChannel.appendLine(`Total symbols obfuscated: ${totalRenamed}`);
-    outputChannel.appendLine(`Symbol mappings saved to symbols.txt`);
-    vscode.window.showInformationMessage(`Obfuscation complete! Obfuscated ${totalRenamed} symbols. Symbol mappings saved to symbols.txt.`);
+    outputChannel.appendLine(`Symbol mappings saved to symbols_${detectedLanguage}.txt`);
+    vscode.window.showInformationMessage(`Obfuscation complete! Obfuscated ${totalRenamed} ${langConfig.displayName} symbols. Symbol mappings saved to symbols_${detectedLanguage}.txt.`);
 }
 
-async function processWorkspaceForObfuscation(folder: vscode.WorkspaceFolder): Promise<number> {
-    // Only process files in /lib and /test folders to speed up obfuscation
-    const libPattern = new vscode.RelativePattern(folder, 'lib/**/*.dart');
-    const testPattern = new vscode.RelativePattern(folder, 'test/**/*.dart');
-    
-    const libFiles = await vscode.workspace.findFiles(libPattern);
-    const testFiles = await vscode.workspace.findFiles(testPattern);
-    const dartFiles = [...libFiles, ...testFiles];
+async function detectWorkspaceLanguage(): Promise<string | null> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) return null;
 
-    outputChannel.appendLine(`Found ${dartFiles.length} Dart files in ${folder.name} (/lib: ${libFiles.length}, /test: ${testFiles.length})`);
+    // Priority order: C# > Python > TypeScript > Dart
+    const languagePriority = ['csharp', 'python', 'typescript', 'dart'];
+    
+    for (const lang of languagePriority) {
+        const config = supportedLanguages.get(lang)!;
+        let hasFiles = false;
+        
+        for (const folder of workspaceFolders) {
+            for (const pattern of config.filePatterns) {
+                const files = await vscode.workspace.findFiles(new vscode.RelativePattern(folder, pattern));
+                if (files.length > 0) {
+                    hasFiles = true;
+                    break;
+                }
+            }
+            if (hasFiles) break;
+        }
+        
+        if (hasFiles) {
+            outputChannel.appendLine(`Detected language: ${config.displayName}`);
+            return lang;
+        }
+    }
+    
+    return null;
+}
+
+async function processWorkspaceForObfuscation(folder: vscode.WorkspaceFolder, langConfig: LanguageConfig): Promise<number> {
+    let allFiles: vscode.Uri[] = [];
+    let patternCounts: { [pattern: string]: number } = {};
+    
+    // Process all file patterns for the language
+    for (const pattern of langConfig.filePatterns) {
+        if (pattern.startsWith('!')) {
+            // Skip exclusion patterns (handled by findFiles automatically)
+            continue;
+        }
+        
+        const files = await vscode.workspace.findFiles(new vscode.RelativePattern(folder, pattern));
+        allFiles.push(...files);
+        patternCounts[pattern] = files.length;
+    }
+    
+    // Remove duplicates
+    allFiles = [...new Map(allFiles.map(file => [file.fsPath, file])).values()];
+
+    const patternInfo = Object.entries(patternCounts)
+        .map(([pattern, count]) => `${pattern}: ${count}`)
+        .join(', ');
+    
+    outputChannel.appendLine(`Found ${allFiles.length} ${langConfig.displayName} files in ${folder.name} (${patternInfo})`);
 
     let totalRenamed = 0;
 
-    for (const fileUri of dartFiles) {
-        const renamedCount = await obfuscateFileSymbols(fileUri);
+    for (const fileUri of allFiles) {
+        const renamedCount = await obfuscateFileSymbols(fileUri, langConfig);
         totalRenamed += renamedCount;
     }
 
     return totalRenamed;
 }
 
-async function obfuscateFileSymbols(fileUri: vscode.Uri): Promise<number> {
+async function obfuscateFileSymbols(fileUri: vscode.Uri, langConfig: LanguageConfig): Promise<number> {
     let renamedCount = 0;
     
     try {
@@ -96,7 +287,7 @@ async function obfuscateFileSymbols(fileUri: vscode.Uri): Promise<number> {
         );
 
         if (symbols && symbols.length > 0) {
-            renamedCount = await obfuscateSymbols(symbols, fileUri, document);
+            renamedCount = await obfuscateSymbols(symbols, fileUri, document, langConfig);
         } else {
             outputChannel.appendLine('  No symbols found');
         }
@@ -108,7 +299,7 @@ async function obfuscateFileSymbols(fileUri: vscode.Uri): Promise<number> {
     return renamedCount;
 }
 
-async function obfuscateSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode.Uri, document: vscode.TextDocument): Promise<number> {
+async function obfuscateSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode.Uri, document: vscode.TextDocument, langConfig: LanguageConfig): Promise<number> {
     let renamedCount = 0;
     
     // Process symbols in reverse order to avoid position shifts
@@ -117,7 +308,7 @@ async function obfuscateSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscod
     for (const symbol of sortedSymbols) {
         // Recursively process child symbols first
         if (symbol.children && symbol.children.length > 0) {
-            renamedCount += await obfuscateSymbols(symbol.children, fileUri, document);
+            renamedCount += await obfuscateSymbols(symbol.children, fileUri, document, langConfig);
         }
         
         // Skip symbol types that typically cannot be renamed
@@ -136,56 +327,14 @@ async function obfuscateSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscod
             vscode.SymbolKind.Null
         ];
 
-        // Skip built-in or special symbols that shouldn't be renamed
-        const skipNames = [
-            // Dart built-ins
-            'main', 'toString', 'hashCode', 'operator==', 'runtimeType', 'noSuchMethod',
-            
-            // Flutter Widget lifecycle methods
-            'build', 'initState', 'dispose', 'didChangeDependencies', 'didUpdateWidget',
-            'deactivate', 'activate', 'didChangeAppLifecycleState', 'didHaveMemoryPressure',
-            'didChangeAccessibilityFeatures', 'didChangeTextScaleFactor', 'didChangeLocales',
-            'didChangePlatformBrightness', 'didChangeMetrics', 'createState',
-
-            // Flutter CustomPaint overide method
-            'paint', 'shouldRepaint',
-
-            // Equatable overide
-            'props',
-            
-            // Flutter State methods
-            'setState', 'mounted', 'widget', 'context',
-            
-            // Flutter framework callbacks
-            'onPressed', 'onTap', 'onChanged', 'onSubmitted', 'onEditingComplete',
-            'onFieldSubmitted', 'onSaved', 'validator', 'builder',
-            
-            // Flutter animation methods
-            'addListener', 'removeListener', 'addStatusListener', 'removeStatusListener',
-            'forward', 'reverse', 'reset', 'stop', 'animateTo', 'animateWith',
-            
-            // Flutter controller methods
-            'addListener', 'removeListener', 'notifyListeners', 'hasListeners',
-            'clear', 'text', 'selection', 'value',
-            
-            // Flutter navigation methods
-            'push', 'pop', 'pushReplacement', 'pushNamed', 'popUntil', 'canPop',
-            
-            // Flutter theme and localization
-            'of', 'maybeOf', 'localizationsDelegates', 'supportedLocales',
-            
-            // Common Flutter patterns
-            'copyWith', 'lerp', 'resolve', 'createTween', 'transform'
-        ];
-        
-        // Check for Flutter framework methods and patterns
+        // Use language-specific skip names and framework detection
         const shouldSkip = nonRenameableTypes.includes(symbol.kind) || 
-                          skipNames.includes(symbol.name) ||
-                          isFlutterFrameworkMethod(symbol);
+                          langConfig.skipNames.includes(symbol.name) ||
+                          langConfig.isFrameworkMethod(symbol);
         
         
         if (shouldSkip) {
-            outputChannel.appendLine(`  Skipping ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} (Flutter framework or built-in method)`);
+            outputChannel.appendLine(`  Skipping ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} (${langConfig.displayName} framework or built-in method)`);
         } else {
             // Generate random obfuscated name
             const newName = generateObfuscatedName();
@@ -260,6 +409,90 @@ function isFlutterFrameworkMethod(symbol: vscode.DocumentSymbol): boolean {
     return false;
 }
 
+function isCSharpFrameworkMethod(symbol: vscode.DocumentSymbol): boolean {
+    const name = symbol.name;
+    
+    // Event handlers (common C# patterns)
+    if (name.startsWith('On') && name.length > 2 && name[2] === name[2].toUpperCase()) {
+        return true;
+    }
+    
+    // Property accessors
+    if ((name.startsWith('get_') || name.startsWith('set_')) && name.length > 4) {
+        return true;
+    }
+    
+    // ASP.NET patterns
+    if (name.endsWith('Controller') || name.endsWith('Service') || name.endsWith('Repository')) {
+        return true;
+    }
+    
+    // Attribute or interface patterns
+    if (symbol.detail && (symbol.detail.includes('Attribute') || symbol.detail.includes('Interface'))) {
+        return true;
+    }
+    
+    return false;
+}
+
+function isPythonFrameworkMethod(symbol: vscode.DocumentSymbol): boolean {
+    const name = symbol.name;
+    
+    // Private/protected methods (starting with underscore)
+    if (name.startsWith('_') && !name.startsWith('__')) {
+        return false; // Single underscore methods can be renamed
+    }
+    
+    // Django model methods
+    if (name.startsWith('get_') && name.endsWith('_display')) {
+        return true;
+    }
+    
+    // Flask route decorators or common patterns
+    if (name.endsWith('_view') || name.endsWith('_handler')) {
+        return true;
+    }
+    
+    // Test methods
+    if (name.startsWith('test_')) {
+        return true;
+    }
+    
+    return false;
+}
+
+function isTypeScriptFrameworkMethod(symbol: vscode.DocumentSymbol): boolean {
+    const name = symbol.name;
+    
+    // React lifecycle methods patterns
+    if (name.startsWith('component') && name.includes('Did')) {
+        return true;
+    }
+    
+    // React hook patterns
+    if (name.startsWith('use') && name.length > 3 && name[3] === name[3].toUpperCase()) {
+        return true;
+    }
+    
+    // Event handlers (common patterns)
+    if ((name.startsWith('on') || name.startsWith('handle')) && name.length > 2 && 
+        name[2] === name[2].toUpperCase()) {
+        return true;
+    }
+    
+    // Angular patterns
+    if (name.startsWith('ng') && name.length > 2 && name[2] === name[2].toUpperCase()) {
+        return true;
+    }
+    
+    // Common patterns
+    if (name.endsWith('Handler') || name.endsWith('Callback') || name.endsWith('Listener')) {
+        return true;
+    }
+    
+    return false;
+}
+
 function generateObfuscatedName(): string {
     const letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const alphanumeric = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -292,7 +525,7 @@ function generateObfuscatedName(): string {
     return name;
 }
 
-async function writeSymbolsFile(): Promise<void> {
+async function writeSymbolsFile(language: string): Promise<void> {
     try {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
@@ -300,10 +533,11 @@ async function writeSymbolsFile(): Promise<void> {
             return;
         }
 
-        const symbolsFilePath = path.join(workspaceFolder.uri.fsPath, 'symbols.txt');
+        const symbolsFilePath = path.join(workspaceFolder.uri.fsPath, `symbols_${language}.txt`);
         
+        const langConfig = supportedLanguages.get(language)!;
         // Create content with original -> obfuscated mappings
-        let content = '# Symbol Obfuscation Mappings\n';
+        let content = `# ${langConfig.displayName} Symbol Obfuscation Mappings\n`;
         content += '# Format: OriginalName -> ObfuscatedName\n';
         content += `# Generated: ${new Date().toISOString()}\n\n`;
         

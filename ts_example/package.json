@@ -1,0 +1,16 @@
+{
+  "name": "ts-obfuscation-example",
+  "version": "1.0.0",
+  "description": "TypeScript example for testing code obfuscation",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "dev": "ts-node src/main.ts"
+  },
+  "devDependencies": {
+    "typescript": "^4.9.0",
+    "ts-node": "^10.9.0",
+    "@types/node": "^18.0.0"
+  }
+}

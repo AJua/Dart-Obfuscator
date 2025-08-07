@@ -1,7 +1,7 @@
 {
   "name": "dart-obfuscator",
-  "displayName": "Dart Obfuscator", 
-  "description": "Obfuscates Dart code by renaming symbols with random names",
+  "displayName": "Code Obfuscator", 
+  "description": "Obfuscates code by renaming symbols with random names. Supports Dart/Flutter, C#, Python, and TypeScript/JavaScript.",
   "version": "1.0.0",
   "publisher": "linchienhung",
   "engines": {
@@ -18,18 +18,26 @@
   "keywords": [
     "dart",
     "flutter",
+    "csharp",
+    "python",
+    "typescript",
+    "javascript",
     "obfuscation",
     "code-protection"
   ],
   "activationEvents": [
-    "onLanguage:dart"
+    "onLanguage:dart",
+    "onLanguage:csharp",
+    "onLanguage:python",
+    "onLanguage:typescript",
+    "onLanguage:javascript"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "dart-obfuscator.obfuscateCode",
-        "title": "Obfuscate Dart Code"
+        "title": "Obfuscate Code"
       }
     ]
   },

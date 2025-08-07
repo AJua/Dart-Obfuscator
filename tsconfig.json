@@ -12,6 +12,10 @@
   },
   "exclude": [
     "node_modules",
-    ".vscode-test"
+    ".vscode-test",
+    "csharp_example",
+    "python_example", 
+    "ts_example",
+    "dart_example"
   ]
 }
