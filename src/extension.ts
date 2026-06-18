@@ -51,6 +51,7 @@ function initializeLanguageConfigs() {
             'deactivate', 'activate', 'didChangeAppLifecycleState', 'didHaveMemoryPressure',
             'didChangeAccessibilityFeatures', 'didChangeTextScaleFactor', 'didChangeLocales',
             'didChangePlatformBrightness', 'didChangeMetrics', 'createState',
+            'DefaultFirebaseOptions', 'currentPlatform',
             // Flutter CustomPaint override methods
             'paint', 'shouldRepaint',
             // Equatable override
@@ -70,7 +71,29 @@ function initializeLanguageConfigs() {
             // Flutter theme and localization
             'of', 'maybeOf', 'localizationsDelegates', 'supportedLocales',
             // Common Flutter patterns
-            'copyWith', 'lerp', 'resolve', 'createTween', 'transform'
+            'copyWith', 'lerp', 'resolve', 'createTween', 'transform',
+            // HTTP client overrides (BaseClient, HttpClient)
+            'send', 'close', 'open', 'read', 'write', 'flush', 'listen',
+            // LocalizationsDelegate overrides
+            'load', 'isSupported', 'shouldReload',
+            // Dart Object/Comparable overrides
+            'compareTo', 'call',
+            // Iterable/Stream overrides
+            'map', 'where', 'fold', 'reduce', 'any', 'every', 'expand',
+            'contains', 'elementAt', 'firstWhere', 'lastWhere', 'singleWhere',
+            'skip', 'take', 'toList', 'toSet', 'join', 'forEach',
+            // Serialization conventions
+            'fromJson', 'toJson', 'fromMap', 'toMap',
+            // State restoration
+            'restoreState', 'saveState',
+            // ChangeNotifier / ValueNotifier (duplicates kept for clarity)
+            // 'addListener', 'removeListener', 'notifyListeners', 'hasListeners' already listed above
+            // TickerProvider
+            'createTicker',
+            // RouteAware
+            'didPush', 'didPop', 'didPushNext', 'didPopNext',
+            // Dart async patterns
+            'then', 'catchError', 'whenComplete', 'asStream', 'timeout'
         ],
         isFrameworkMethod: isFlutterFrameworkMethod
     });
@@ -171,14 +194,17 @@ async function obfuscateCode() {
     }
 
     const langConfig = supportedLanguages.get(detectedLanguage)!;
-    
+
     // Clear previous output and show the output channel
     outputChannel.clear();
     outputChannel.show();
 
-    // Clear used names set and symbol mappings for fresh obfuscation
+    // Clear used names set and symbol mappings
     usedNames.clear();
     symbolMappings.clear();
+
+    // Load existing mappings from symbols.json if it exists
+    await loadExistingMappings();
 
     outputChannel.appendLine(`=== ${langConfig.displayName.toUpperCase()} CODE OBFUSCATION ===`);
     outputChannel.appendLine('Starting symbol obfuscation...');
@@ -199,8 +225,8 @@ async function obfuscateCode() {
 
     outputChannel.appendLine(`\n=== OBFUSCATION COMPLETE ===`);
     outputChannel.appendLine(`Total symbols obfuscated: ${totalRenamed}`);
-    outputChannel.appendLine(`Symbol mappings saved to symbols_${detectedLanguage}.txt`);
-    vscode.window.showInformationMessage(`Obfuscation complete! Obfuscated ${totalRenamed} ${langConfig.displayName} symbols. Symbol mappings saved to symbols_${detectedLanguage}.txt.`);
+    outputChannel.appendLine(`Symbol mappings saved to symbols.json`);
+    vscode.window.showInformationMessage(`Obfuscation complete! Obfuscated ${totalRenamed} ${langConfig.displayName} symbols. Symbol mappings saved to symbols.json.`);
 }
 
 async function detectWorkspaceLanguage(): Promise<string | null> {
@@ -208,7 +234,7 @@ async function detectWorkspaceLanguage(): Promise<string | null> {
     if (!workspaceFolders) return null;
 
     // Priority order: C# > Python > TypeScript > Dart
-    const languagePriority = ['csharp', 'python', 'typescript', 'dart'];
+    const languagePriority = ['csharp', 'python', 'dart', 'typescript'];
     
     for (const lang of languagePriority) {
         const config = supportedLanguages.get(lang)!;
@@ -281,11 +307,21 @@ async function processWorkspaceForObfuscation(folder: vscode.WorkspaceFolder, la
     
     outputChannel.appendLine(`Found ${allFiles.length} ${langConfig.displayName} files in ${folder.name} after filtering (${patternInfo})`);
 
+    // Process files in parallel for better performance
+    // Note: Symbol renaming within each file is still sequential for safety
+    const CONCURRENCY_LIMIT = 5;  // Process up to 5 files at once
     let totalRenamed = 0;
 
-    for (const fileUri of allFiles) {
-        const renamedCount = await obfuscateFileSymbols(fileUri, langConfig);
-        totalRenamed += renamedCount;
+    // Split files into batches to avoid overwhelming the language server
+    for (let i = 0; i < allFiles.length; i += CONCURRENCY_LIMIT) {
+        const batch = allFiles.slice(i, i + CONCURRENCY_LIMIT);
+        const batchResults = await Promise.all(
+            batch.map(fileUri => obfuscateFileSymbols(fileUri, langConfig))
+        );
+        totalRenamed += batchResults.reduce((sum, count) => sum + count, 0);
+
+        // Progress update
+        outputChannel.appendLine(`Progress: ${Math.min(i + CONCURRENCY_LIMIT, allFiles.length)}/${allFiles.length} files processed`);
     }
 
     return totalRenamed;
@@ -353,21 +389,35 @@ async function obfuscateFileSymbols(fileUri: vscode.Uri, langConfig: LanguageCon
     return renamedCount;
 }
 
+// Dart reserved words and built-in identifiers that must never be renamed
+const dartKeywords = [
+    'required', 'abstract', 'as', 'assert', 'async', 'await', 'break',
+    'case', 'catch', 'class', 'const', 'continue', 'covariant', 'default',
+    'deferred', 'do', 'dynamic', 'else', 'enum', 'export', 'extends',
+    'extension', 'external', 'factory', 'false', 'final', 'finally',
+    'for', 'Function', 'get', 'hide', 'if', 'implements', 'import',
+    'in', 'interface', 'is', 'late', 'library', 'mixin', 'new', 'null',
+    'on', 'operator', 'part', 'rethrow', 'return', 'sealed', 'set',
+    'show', 'static', 'super', 'switch', 'sync', 'this', 'throw',
+    'true', 'try', 'typedef', 'var', 'void', 'when', 'while', 'with', 'yield',
+];
+
 async function obfuscateSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode.Uri, document: vscode.TextDocument, langConfig: LanguageConfig): Promise<number> {
     let renamedCount = 0;
-    
+
     // Process symbols in reverse order to avoid position shifts
     const sortedSymbols = [...symbols].sort((a, b) => b.range.start.line - a.range.start.line);
-    
+
     for (const symbol of sortedSymbols) {
         // Recursively process child symbols first
         if (symbol.children && symbol.children.length > 0) {
             renamedCount += await obfuscateSymbols(symbol.children, fileUri, document, langConfig);
         }
-        
+
         // Skip symbol types that typically cannot be renamed
         const nonRenameableTypes = [
             vscode.SymbolKind.Constructor,
+            vscode.SymbolKind.EnumMember,
             vscode.SymbolKind.File,
             vscode.SymbolKind.Module,
             vscode.SymbolKind.Namespace,
@@ -381,20 +431,53 @@ async function obfuscateSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscod
             vscode.SymbolKind.Null
         ];
 
+        // Skip symbols that were already obfuscated by a prior rename
+        if (usedNames.has(symbol.name)) {
+            outputChannel.appendLine(`  Skipping ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} (already obfuscated)`);
+            continue;
+        }
+
         // Use language-specific skip names and framework detection
-        const shouldSkip = nonRenameableTypes.includes(symbol.kind) || 
-                          langConfig.skipNames.includes(symbol.name) ||
-                          langConfig.isFrameworkMethod(symbol);
-        
-        
+        const isNonRenameableType = nonRenameableTypes.includes(symbol.kind);
+        const isInSkipList = langConfig.skipNames.includes(symbol.name);
+        const isFrameworkMethod = langConfig.isFrameworkMethod(symbol);
+        const isLanguageKeyword = langConfig.name === 'dart' && dartKeywords.includes(symbol.name);
+
+        const shouldSkip = isNonRenameableType || isInSkipList || isFrameworkMethod || isLanguageKeyword;
+
         if (shouldSkip) {
-            outputChannel.appendLine(`  Skipping ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} (${langConfig.displayName} framework or built-in method)`);
+            // Provide specific reason for skipping
+            let reason: string;
+            if (isNonRenameableType) {
+                reason = 'non-renameable type';
+            } else if (isLanguageKeyword) {
+                reason = 'language keyword';
+            } else if (isInSkipList) {
+                reason = `${langConfig.displayName} framework or built-in method`;
+            } else if (isFrameworkMethod) {
+                reason = `${langConfig.displayName} framework method pattern`;
+            } else {
+                reason = 'unknown reason';
+            }
+
+            outputChannel.appendLine(`  Skipping ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} (${reason})`);
         } else {
-            // Generate random obfuscated name
-            const newName = generateObfuscatedName();
-            
-            try {
+            // Check if this symbol already has a mapping from previous obfuscation
+            let newName: string;
+            if (symbolMappings.has(symbol.name)) {
+                // Reuse existing mapping
+                newName = symbolMappings.get(symbol.name)!;
+                outputChannel.appendLine(`  Reusing mapping for ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} -> ${newName}`);
+            } else {
+                // Check if symbol is private (starts with underscore)
+                const isPrivate = symbol.name.startsWith('_');
+
+                // Generate new random obfuscated name
+                newName = generateObfuscatedName(isPrivate);
                 outputChannel.appendLine(`  Obfuscating ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} -> ${newName}`);
+            }
+
+            try {
                 
                 // Use VSCode's rename provider to rename the symbol
                 const position = symbol.selectionRange.start;
@@ -437,29 +520,41 @@ async function obfuscateSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscod
 function isFlutterFrameworkMethod(symbol: vscode.DocumentSymbol): boolean {
     // Check for common Flutter method patterns that shouldn't be renamed
     const name = symbol.name;
-    
-    // Override methods (typically start with specific patterns)
-    if (name.startsWith('didChange') || name.startsWith('willChange') || 
-        name.startsWith('on') && name.length > 2 && name[2] === name[2].toUpperCase()) {
+
+    // If detail indicates this is an override, skip it
+    if (symbol.detail && symbol.detail.includes('@override')) {
         return true;
     }
-    
+
+    // HTTP client methods that must keep their names
+    const httpOverrideMethods = ['send', 'close', 'open', 'read', 'write', 'flush'];
+    if (httpOverrideMethods.includes(name)) {
+        return true;
+    }
+
+    // Override methods (typically start with specific patterns)
+    // Note: parentheses around the `on*` check fix operator precedence bug
+    if (name.startsWith('didChange') || name.startsWith('willChange') ||
+        (name.startsWith('on') && name.length > 2 && name[2] === name[2].toUpperCase())) {
+        return true;
+    }
+
     // Methods that commonly return Widget types (check if detail contains Widget)
     if (symbol.detail && (symbol.detail.includes('Widget') || symbol.detail.includes('State<'))) {
         return true;
     }
-    
+
     // Getter/setter patterns commonly used in Flutter
-    if ((name.startsWith('get') || name.startsWith('set')) && name.length > 3 && 
+    if ((name.startsWith('get') || name.startsWith('set')) && name.length > 3 &&
         name[3] === name[3].toUpperCase()) {
         return false; // These are often custom getters/setters, can be renamed
     }
-    
+
     // Methods ending with common Flutter suffixes
     if (name.endsWith('Builder') || name.endsWith('Delegate') || name.endsWith('Handler')) {
         return true;
     }
-    
+
     return false;
 }
 
@@ -547,23 +642,65 @@ function isTypeScriptFrameworkMethod(symbol: vscode.DocumentSymbol): boolean {
     return false;
 }
 
-function generateObfuscatedName(): string {
+async function loadExistingMappings(): Promise<void> {
+    try {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            return;
+        }
+
+        const symbolsFilePath = path.join(workspaceFolder.uri.fsPath, 'symbols.json');
+
+        // Check if file exists
+        try {
+            await fs.promises.access(symbolsFilePath);
+        } catch {
+            // File doesn't exist, no existing mappings to load
+            outputChannel.appendLine('No existing symbols.json found - starting fresh obfuscation');
+            return;
+        }
+
+        // Read and parse the file
+        const fileContent = await fs.promises.readFile(symbolsFilePath, 'utf8');
+        const data = JSON.parse(fileContent);
+
+        // Load mappings into symbolMappings and usedNames
+        if (data.mappings && typeof data.mappings === 'object') {
+            for (const [originalName, obfuscatedName] of Object.entries(data.mappings)) {
+                symbolMappings.set(originalName, obfuscatedName as string);
+                usedNames.add(obfuscatedName as string);
+            }
+            outputChannel.appendLine(`Loaded ${symbolMappings.size} existing symbol mappings from symbols.json`);
+        }
+
+    } catch (error) {
+        outputChannel.appendLine(`Warning: Failed to load existing mappings: ${error}`);
+        // Continue with empty mappings
+    }
+}
+
+function generateObfuscatedName(isPrivate: boolean = false): string {
     const letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const alphanumeric = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    
+
     let name: string;
     let attempts = 0;
     const maxAttempts = 1000;
-    
+
     do {
         // Generate random length between 3 and 12
         const length = Math.floor(Math.random() * 10) + 3;
-        
-        // Start with a letter
-        name = letters.charAt(Math.floor(Math.random() * letters.length));
-        
+
+        // Start with underscore for private symbols, otherwise a letter
+        if (isPrivate) {
+            name = '_' + letters.charAt(Math.floor(Math.random() * letters.length));
+        } else {
+            name = letters.charAt(Math.floor(Math.random() * letters.length));
+        }
+
         // Add remaining characters (letters or numbers)
-        for (let i = 1; i < length; i++) {
+        const startIndex = isPrivate ? 2 : 1;  // Skip first 2 chars if private (_x), otherwise 1 (x)
+        for (let i = startIndex; i < length; i++) {
             name += alphanumeric.charAt(Math.floor(Math.random() * alphanumeric.length));
         }
         
@@ -583,31 +720,33 @@ async function writeSymbolsFile(language: string): Promise<void> {
     try {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
-            outputChannel.appendLine('No workspace folder found for symbols.txt');
+            outputChannel.appendLine('No workspace folder found for symbols.json');
             return;
         }
 
-        const symbolsFilePath = path.join(workspaceFolder.uri.fsPath, `symbols_${language}.txt`);
-        
+        const symbolsFilePath = path.join(workspaceFolder.uri.fsPath, 'symbols.json');
+
         const langConfig = supportedLanguages.get(language)!;
-        // Create content with original -> obfuscated mappings
-        let content = `# ${langConfig.displayName} Symbol Obfuscation Mappings\n`;
-        content += '# Format: OriginalName -> ObfuscatedName\n';
-        content += `# Generated: ${new Date().toISOString()}\n\n`;
-        
+
         // Sort mappings alphabetically by original name for better readability
         const sortedMappings = Array.from(symbolMappings.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-        
-        for (const [originalName, obfuscatedName] of sortedMappings) {
-            content += `${originalName} -> ${obfuscatedName}\n`;
-        }
-        
-        // Write to file
+
+        // Create JSON structure
+        const jsonOutput = {
+            language: langConfig.displayName,
+            languageId: language,
+            generated: new Date().toISOString(),
+            totalSymbols: sortedMappings.length,
+            mappings: Object.fromEntries(sortedMappings)
+        };
+
+        // Write to file with pretty formatting
+        const content = JSON.stringify(jsonOutput, null, 2);
         await fs.promises.writeFile(symbolsFilePath, content, 'utf8');
         outputChannel.appendLine(`Symbol mappings written to: ${symbolsFilePath}`);
-        
+
     } catch (error) {
-        outputChannel.appendLine(`Error writing symbols.txt: ${error}`);
+        outputChannel.appendLine(`Error writing symbols.json: ${error}`);
     }
 }
 
