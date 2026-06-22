@@ -210,23 +210,46 @@ async function obfuscateCode() {
     outputChannel.appendLine('Starting symbol obfuscation...');
     outputChannel.appendLine('Renaming all renameable symbols with random names...');
 
+    // Track time
+    const startTime = Date.now();
     let totalRenamed = 0;
 
-    for (const folder of workspaceFolders) {
-        outputChannel.appendLine(`\nProcessing workspace: ${folder.name}`);
-        const renamedCount = await processWorkspaceForObfuscation(folder, langConfig);
-        totalRenamed += renamedCount;
-    }
+    // Use VSCode progress indicator
+    await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Obfuscating ${langConfig.displayName} code`,
+        cancellable: false
+    }, async (progress) => {
+        for (const folder of workspaceFolders) {
+            outputChannel.appendLine(`\nProcessing workspace: ${folder.name}`);
 
-    // Write symbols mapping to file
-    if (symbolMappings.size > 0) {
-        await writeSymbolsFile(detectedLanguage);
-    }
+            progress.report({
+                message: `Processing ${folder.name}...`,
+                increment: 0
+            });
+
+            const renamedCount = await processWorkspaceForObfuscation(folder, langConfig, progress);
+            totalRenamed += renamedCount;
+        }
+
+        // Write symbols mapping to file
+        if (symbolMappings.size > 0) {
+            progress.report({ message: 'Saving symbol mappings...' });
+            await writeSymbolsFile(detectedLanguage);
+        }
+
+        return totalRenamed;
+    });
+
+    // Calculate elapsed time
+    const endTime = Date.now();
+    const elapsedSeconds = ((endTime - startTime) / 1000).toFixed(2);
 
     outputChannel.appendLine(`\n=== OBFUSCATION COMPLETE ===`);
     outputChannel.appendLine(`Total symbols obfuscated: ${totalRenamed}`);
+    outputChannel.appendLine(`Time elapsed: ${elapsedSeconds}s`);
     outputChannel.appendLine(`Symbol mappings saved to symbols.json`);
-    vscode.window.showInformationMessage(`Obfuscation complete! Obfuscated ${totalRenamed} ${langConfig.displayName} symbols. Symbol mappings saved to symbols.json.`);
+    vscode.window.showInformationMessage(`Obfuscation complete! Obfuscated ${totalRenamed} ${langConfig.displayName} symbols in ${elapsedSeconds}s. Mappings saved to symbols.json.`);
 }
 
 async function detectWorkspaceLanguage(): Promise<string | null> {
@@ -275,7 +298,7 @@ function getExcludePatterns(language: string): string[] {
     }
 }
 
-async function processWorkspaceForObfuscation(folder: vscode.WorkspaceFolder, langConfig: LanguageConfig): Promise<number> {
+async function processWorkspaceForObfuscation(folder: vscode.WorkspaceFolder, langConfig: LanguageConfig, progress?: vscode.Progress<{ message?: string; increment?: number }>): Promise<number> {
     let allFiles: vscode.Uri[] = [];
     let patternCounts: { [pattern: string]: number } = {};
     
@@ -307,21 +330,30 @@ async function processWorkspaceForObfuscation(folder: vscode.WorkspaceFolder, la
     
     outputChannel.appendLine(`Found ${allFiles.length} ${langConfig.displayName} files in ${folder.name} after filtering (${patternInfo})`);
 
-    // Process files in parallel for better performance
-    // Note: Symbol renaming within each file is still sequential for safety
-    const CONCURRENCY_LIMIT = 5;  // Process up to 5 files at once
+    // Process files sequentially
     let totalRenamed = 0;
 
-    // Split files into batches to avoid overwhelming the language server
-    for (let i = 0; i < allFiles.length; i += CONCURRENCY_LIMIT) {
-        const batch = allFiles.slice(i, i + CONCURRENCY_LIMIT);
-        const batchResults = await Promise.all(
-            batch.map(fileUri => obfuscateFileSymbols(fileUri, langConfig))
-        );
-        totalRenamed += batchResults.reduce((sum, count) => sum + count, 0);
+    for (let i = 0; i < allFiles.length; i++) {
+        const fileUri = allFiles[i];
+        const renamedCount = await obfuscateFileSymbols(fileUri, langConfig);
+        totalRenamed += renamedCount;
 
-        // Progress update
-        outputChannel.appendLine(`Progress: ${Math.min(i + CONCURRENCY_LIMIT, allFiles.length)}/${allFiles.length} files processed`);
+        // Calculate progress percentage
+        const filesProcessed = i + 1;
+        const progressPercent = Math.round((filesProcessed / allFiles.length) * 100);
+
+        // Update progress bar
+        if (progress) {
+            progress.report({
+                message: `${filesProcessed}/${allFiles.length} files (${progressPercent}%)`,
+                increment: (1 / allFiles.length) * 100
+            });
+        }
+
+        // Console progress update (every 5 files to reduce log spam)
+        if (filesProcessed % 5 === 0 || filesProcessed === allFiles.length) {
+            outputChannel.appendLine(`Progress: ${filesProcessed}/${allFiles.length} files processed (${progressPercent}%)`);
+        }
     }
 
     return totalRenamed;
@@ -402,16 +434,16 @@ const dartKeywords = [
     'true', 'try', 'typedef', 'var', 'void', 'when', 'while', 'with', 'yield',
 ];
 
-async function obfuscateSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode.Uri, document: vscode.TextDocument, langConfig: LanguageConfig): Promise<number> {
+async function obfuscateSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscode.Uri, document: vscode.TextDocument, langConfig: LanguageConfig, parentSymbol?: vscode.DocumentSymbol): Promise<number> {
     let renamedCount = 0;
 
     // Process symbols in reverse order to avoid position shifts
     const sortedSymbols = [...symbols].sort((a, b) => b.range.start.line - a.range.start.line);
 
     for (const symbol of sortedSymbols) {
-        // Recursively process child symbols first
+        // Recursively process child symbols first (pass current symbol as parent)
         if (symbol.children && symbol.children.length > 0) {
-            renamedCount += await obfuscateSymbols(symbol.children, fileUri, document, langConfig);
+            renamedCount += await obfuscateSymbols(symbol.children, fileUri, document, langConfig, symbol);
         }
 
         // Skip symbol types that typically cannot be renamed
@@ -464,17 +496,24 @@ async function obfuscateSymbols(symbols: vscode.DocumentSymbol[], fileUri: vscod
         } else {
             // Check if this symbol already has a mapping from previous obfuscation
             let newName: string;
+
+            // Build context string for better logging
+            let contextInfo = '';
+            if (parentSymbol) {
+                contextInfo = ` in ${vscode.SymbolKind[parentSymbol.kind]} ${parentSymbol.name}`;
+            }
+
             if (symbolMappings.has(symbol.name)) {
                 // Reuse existing mapping
                 newName = symbolMappings.get(symbol.name)!;
-                outputChannel.appendLine(`  Reusing mapping for ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} -> ${newName}`);
+                outputChannel.appendLine(`  Reusing mapping for ${vscode.SymbolKind[symbol.kind]}: ${symbol.name}${contextInfo} -> ${newName}`);
             } else {
                 // Check if symbol is private (starts with underscore)
                 const isPrivate = symbol.name.startsWith('_');
 
                 // Generate new random obfuscated name
                 newName = generateObfuscatedName(isPrivate);
-                outputChannel.appendLine(`  Obfuscating ${vscode.SymbolKind[symbol.kind]}: ${symbol.name} -> ${newName}`);
+                outputChannel.appendLine(`  Obfuscating ${vscode.SymbolKind[symbol.kind]}: ${symbol.name}${contextInfo} -> ${newName}`);
             }
 
             try {

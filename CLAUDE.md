@@ -192,15 +192,18 @@ Multiple example directories for testing different languages:
 - Failed renames are logged but don't stop the process
 - Unused generated names are removed from `usedNames` on failure
 
-### Output Channel Logging
-- Detailed logging to "Code Obfuscator" output panel
-- Shows per-file progress, symbol counts, rename success/failure
-- Includes symbol kind (Class, Method, Field, etc.) for each operation
-- Helps diagnose language server issues and framework detection problems
+### Progress Tracking and Logging
+- **Visual Progress Bar**: VSCode notification shows real-time progress with percentage and file count (updates per file)
+- **Time Tracking**: Displays total elapsed time in seconds upon completion
+- **Detailed Output Logging**: "Code Obfuscator" output panel shows:
+  - Progress updates every 5 files (to reduce log spam)
+  - Symbol counts and rename success/failure per symbol
+  - Symbol kind (Class, Method, Field, etc.) for each operation
+  - Specific skip reasons for better debugging
+- **Final Summary**: Completion message includes total symbols obfuscated and time elapsed
 
 ### Performance Optimization
-- **Parallel File Processing**: Processes up to 5 files concurrently for 2-4x speedup on large projects
-- **Batch Progress Updates**: Shows progress after each batch to track long-running operations
 - **Symbol Persistence**: Reuses existing mappings from `symbols.json` to avoid re-processing unchanged symbols
-- **Sequential Symbol Renaming**: Within each file, symbols are renamed sequentially to prevent position conflicts
+- **Sequential Processing**: Files and symbols are processed sequentially for stability and safety
+- **Progress Updates**: Shows progress every 5 files to track long-running operations
 - **Language Server Retry**: Python files include retry logic (3 attempts, 500ms delay) for slower language server initialization
