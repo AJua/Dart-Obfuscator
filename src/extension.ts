@@ -283,6 +283,33 @@ async function detectWorkspaceLanguage(): Promise<string | null> {
     return null;
 }
 
+const IGNORE_FILE_NAME = '.obfuscateignore';
+
+// Reads user-defined skip paths from .obfuscateignore (gitignore-style: one path/glob per line, # comments, blank lines ignored)
+function readIgnoreFilePatterns(folder: vscode.WorkspaceFolder): string[] {
+    const ignoreFilePath = path.join(folder.uri.fsPath, IGNORE_FILE_NAME);
+    if (!fs.existsSync(ignoreFilePath)) {
+        return [];
+    }
+    return fs.readFileSync(ignoreFilePath, 'utf8')
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line.length > 0 && !line.startsWith('#'));
+}
+
+// Converts .obfuscateignore lines into a single VSCode glob pattern, matching the entry itself and anything under it
+function buildUserExcludeGlob(patterns: string[]): string | undefined {
+    if (patterns.length === 0) {
+        return undefined;
+    }
+    const globs = patterns.flatMap(p => {
+        const clean = p.replace(/\/+$/, '');
+        const rooted = clean.startsWith('/') ? clean.slice(1) : `**/${clean}`;
+        return [rooted, `${rooted}/**`];
+    });
+    return `{${globs.join(',')}}`;
+}
+
 function getExcludePatterns(language: string): string[] {
     switch (language) {
         case 'python':
@@ -301,15 +328,21 @@ function getExcludePatterns(language: string): string[] {
 async function processWorkspaceForObfuscation(folder: vscode.WorkspaceFolder, langConfig: LanguageConfig, progress?: vscode.Progress<{ message?: string; increment?: number }>): Promise<number> {
     let allFiles: vscode.Uri[] = [];
     let patternCounts: { [pattern: string]: number } = {};
-    
+
+    const userIgnorePatterns = readIgnoreFilePatterns(folder);
+    const userExcludeGlob = buildUserExcludeGlob(userIgnorePatterns);
+    if (userIgnorePatterns.length > 0) {
+        outputChannel.appendLine(`Loaded ${userIgnorePatterns.length} skip pattern(s) from ${IGNORE_FILE_NAME}: ${userIgnorePatterns.join(', ')}`);
+    }
+
     // Process all file patterns for the language
     for (const pattern of langConfig.filePatterns) {
         if (pattern.startsWith('!')) {
             // Skip exclusion patterns (handled by findFiles automatically)
             continue;
         }
-        
-        const files = await vscode.workspace.findFiles(new vscode.RelativePattern(folder, pattern));
+
+        const files = await vscode.workspace.findFiles(new vscode.RelativePattern(folder, pattern), userExcludeGlob);
         allFiles.push(...files);
         patternCounts[pattern] = files.length;
     }
