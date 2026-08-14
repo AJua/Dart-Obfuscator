@@ -94,6 +94,28 @@ Language-specific framework detection automatically skips:
 - Flutter Lifecycle: `build`, `initState`, `dispose`, etc.
 - Flutter Callbacks: `onPressed`, `onTap`, `validator`, etc.
 
+## Excluding Files (`.obfuscateignore`)
+
+To skip specific paths or files from obfuscation, create a `.obfuscateignore` file in your workspace root — one path/pattern per line, gitignore-style:
+
+```
+# Generated files, never touch
+lib/l10n
+*.g.dart
+build/
+/legacy_module
+```
+
+Supported syntax:
+- One pattern per line; blank lines and `#` comments are ignored
+- Wildcards `*` and `**` (uses VSCode's native glob matching)
+- No leading `/` → matches at any depth (`lib/l10n` matches that path anywhere in the workspace)
+- Leading `/` → matches only from the workspace root (`/legacy_module`)
+- A trailing `/` is optional — `build/` and `build` behave the same
+- Each pattern matches both the entry itself and everything under it (if it's a directory)
+
+Not supported: negation (`!pattern`) and nested per-directory ignore files — only one `.obfuscateignore` at the workspace root is read. This only affects which files get processed for obfuscation; it doesn't change language auto-detection.
+
 ## Example Output
 
 ```
@@ -132,7 +154,7 @@ Symbol mappings saved to symbols_python.txt
 
 ## Extension Settings
 
-No configuration required - works out of the box with sensible defaults.
+No VSCode settings required - works out of the box with sensible defaults. To exclude paths from obfuscation, add a `.obfuscateignore` file (see [Excluding Files](#excluding-files-obfuscateignore) above).
 
 ## Known Limitations
 
